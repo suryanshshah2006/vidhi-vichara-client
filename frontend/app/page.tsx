@@ -11,7 +11,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 const BrandLogo = ({ size = 32 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="42" height="42" rx="10" fill="#FFFBEB" border="1px solid #FDE68A"/>
+    <rect width="42" height="42" rx="10" fill="#FFFBEB" stroke="#FDE68A" strokeWidth={1} />
     <path d="M21 12V30M14 16H28M12 30H30" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M14 16L12 24H16L14 16ZM28 16L26 24H30L28 16Z" fill="#F59E0B" fillOpacity="0.8" stroke="#D97706" strokeWidth="1.5" strokeLinejoin="round" />
   </svg>
