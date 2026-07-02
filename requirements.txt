@@ -5,3 +5,4 @@ supabase
 qdrant-client
 groq
 pydantic
+PyMuPDF
