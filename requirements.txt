@@ -6,3 +6,4 @@ qdrant-client
 groq
 pydantic
 PyMuPDF
+python-docx
