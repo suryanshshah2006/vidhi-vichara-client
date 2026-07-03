@@ -1,21 +1,11 @@
-# --- Core Web Server & API ---
 fastapi
 uvicorn
 python-multipart
 python-dotenv
-
-# --- Authentication & Security ---
 pyjwt[crypto]
-
-# --- Document Parsing & Extraction ---
 PyMuPDF
 python-docx
-
-# --- Vector DB & Embeddings ---
 qdrant-client
-sentence-transformers
-
-# --- LangChain Ecosystem ---
 langchain-core
 langchain-groq
 langchain-qdrant
