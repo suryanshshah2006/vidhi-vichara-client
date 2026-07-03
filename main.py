@@ -12,7 +12,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 
 from qdrant_client import QdrantClient
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -26,6 +26,7 @@ SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 # ── FIXED: Added rstrip('/') to prevent double-slash bugs ──
 raw_sub_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL") or ""
@@ -78,7 +79,13 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
 
 # ── AI ENGINE CONFIGURATION ──
 q_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60.0)
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+
+# Replaced local PyTorch model with cloud endpoint to prevent 512MB RAM crash on Render
+embeddings = HuggingFaceEndpointEmbeddings(
+    model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN
+)
+
 llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama-3.3-70b-versatile", temperature=0.0).bind(response_format={"type": "json_object"})
 vectorstore = QdrantVectorStore(client=q_client, collection_name="indian_laws_master", embedding=embeddings)
 
