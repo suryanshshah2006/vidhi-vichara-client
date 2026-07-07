@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Menu, FileText, CheckCircle, AlertTriangle, Download, UploadCloud, User, Database, ChevronRight, Activity, Scale, MessageSquare, LogOut, ShieldAlert, BarChart3, HardDrive, Clock, Wand2, RefreshCw, Check, ArrowLeft, BookOpen, ExternalLink, Lightbulb, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { Plus, Menu, FileText, CheckCircle, AlertTriangle, Download, UploadCloud, User, Database, ChevronRight, Activity, Scale, MessageSquare, LogOut, ShieldAlert, BarChart3, HardDrive, Clock, Wand2, RefreshCw, Check, ArrowLeft, BookOpen, ExternalLink, Lightbulb, ShieldCheck, Eye, EyeOff, ArrowRight, Cpu, Home as HomeIcon } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── SECURE CLOUD INITIALIZATION ──
@@ -21,15 +21,16 @@ export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  // ── VIEW CONTROLLER: Toggles between Workspace and About Page ──
-  const [activeTab, setActiveTab] = useState<"workspace" | "about">("workspace");
+  // ── VIEW CONTROLLER & ROUTING HISTORY ──
+  const [activeTab, setActiveTab] = useState<"landing" | "workspace" | "about">("landing");
+  const [previousTab, setPreviousTab] = useState<"landing" | "workspace">("landing"); // Remembers where user came from
 
   const [activeUser, setActiveUser] = useState<{ name: string, email: string, role: string, token: string } | null>(null);
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false); 
   
-  // ── NEW AUTH STATE ──
+  // ── AUTH STATE ──
   const [authStep, setAuthStep] = useState<"initial" | "forgot_password" | "verify_otp" | "create_password">("initial");
   const [isResetting, setIsResetting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -61,8 +62,48 @@ export default function Home() {
   const [ingestMsg, setIngestMsg] = useState<{ type: "success" | "error", text: string } | null>(null);
   const ingestFileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── NATIVE BROWSER ROUTING HANDLER ──
+  const navigateTo = (newTab: "landing" | "workspace" | "about") => {
+    // If going to About page, remember where they came from
+    if (newTab === "about" && activeTab !== "about") {
+      setPreviousTab(activeTab as "landing" | "workspace");
+    }
+    setActiveTab(newTab);
+    
+    // Sync with Browser History (Chrome Back/Forward buttons)
+    if (typeof window !== "undefined") {
+      window.history.pushState({ tab: newTab }, "", `?view=${newTab}`);
+    }
+  };
+
   useEffect(() => {
     setIsMounted(true);
+
+    // Initialize Chrome History state to prevent first back-click from leaving site
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const view = urlParams.get("view") as "landing" | "workspace" | "about";
+      if (view && ["landing", "workspace", "about"].includes(view)) {
+        setActiveTab(view);
+        window.history.replaceState({ tab: view }, "", `?view=${view}`);
+      } else {
+        window.history.replaceState({ tab: "landing" }, "", `?view=landing`);
+      }
+
+      // Listen for Chrome Native Back Button
+      const handlePopState = (event: PopStateEvent) => {
+        if (event.state && event.state.tab) {
+          setActiveTab(event.state.tab);
+        } else {
+          setActiveTab("landing");
+        }
+      };
+      window.addEventListener("popstate", handlePopState);
+      return () => window.removeEventListener("popstate", handlePopState);
+    }
+  }, []);
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) restoreUserSession(session);
     });
@@ -129,7 +170,6 @@ export default function Home() {
     } catch (err: any) { setErrorMsg(err.message || "Failed to send OTP."); }
   };
 
-  // ── NEW: FORGOT PASSWORD INITIATE ──
   const handleForgotPasswordInitiate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail.includes("@")) return setErrorMsg("Please enter a valid email address.");
@@ -146,7 +186,6 @@ export default function Home() {
     if (otpToken.length < 6) return setErrorMsg("Please enter the full 6-digit OTP.");
     setErrorMsg(null);
     try {
-      // Differentiates between 'email' (signup) and 'recovery' (password reset) token types
       const { error } = await supabase.auth.verifyOtp({ 
         email: authEmail, 
         token: otpToken, 
@@ -195,7 +234,7 @@ export default function Home() {
   const handleLogout = async () => { await supabase.auth.signOut(); };
   
   const startNewAudit = () => { 
-    setActiveTab("workspace");
+    navigateTo("workspace");
     setResult(null); 
     setFile(null); 
     setInputText(""); 
@@ -204,7 +243,7 @@ export default function Home() {
   };
   
   const loadHistoryItem = (item: any) => { 
-    setActiveTab("workspace");
+    navigateTo("workspace");
     setResult(item.result); 
     setCurrentSessionId(item.id); 
     setInputText(""); 
@@ -425,75 +464,206 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-[#FAFAFA] text-slate-800 font-sans overflow-hidden">
       
-      {/* SIDEBAR */}
-      <div className={`transition-all duration-300 ease-in-out border-r border-slate-200 bg-[#F8F9FA] flex flex-col flex-shrink-0 z-30 shadow-[2px_0_10px_rgba(0,0,0,0.02)] ${sidebarOpen ? 'w-64' : 'w-16'}`}>
-        <div className="flex items-center justify-between p-4">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-500"><Menu className="w-5 h-5" /></button>
-          {sidebarOpen && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && (
-            <button onClick={startNewAudit} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500" title="New Audit"><Plus className="w-5 h-5" /></button>
-          )}
-        </div>
-        {!sidebarOpen && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && (
-           <div className="flex flex-col items-center gap-4 mt-2"><button onClick={startNewAudit} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500" title="New Audit"><Plus className="w-5 h-5" /></button></div>
-        )}
-
-        <div className="flex-1 overflow-y-auto mt-4 px-3">
-          {sidebarOpen && history.length > 0 && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Recent Records</div>}
-          {sidebarOpen && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && history.map((item) => (
-            <button key={item.id} title={item.title} onClick={() => loadHistoryItem(item)} className={`w-full text-left px-3 py-2 rounded-lg mb-1 truncate text-sm transition-colors flex items-center gap-3 ${currentSessionId === item.id && activeTab === "workspace" ? 'bg-amber-100/50 text-amber-900 font-medium' : 'text-slate-600 hover:bg-slate-200'}`}>
-              <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-50" />
-              <span className="truncate">{item.title}</span>
-            </button>
-          ))}
-        </div>
-        
-        {/* ── ABOUT SECTION TOGGLE ── */}
-        <div className="px-3 pb-2">
-          <button 
-            onClick={() => { setActiveTab(activeTab === "about" ? "workspace" : "about"); if (window.innerWidth < 768) setSidebarOpen(false); }} 
-            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition text-sm font-bold ${activeTab === 'about' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs' : 'text-slate-600 hover:bg-slate-200/80'}`}
-            title="About Framework"
-          >
-            <BookOpen className="w-4 h-4 flex-shrink-0 text-indigo-600" />
-            {sidebarOpen && <span className="truncate">About Framework</span>}
-          </button>
-        </div>
-
-        <div className="p-4 border-t border-slate-200">
-          {activeUser ? (
-            <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${activeUser.email === 'admin.iitjodpur.vidhivichara2026@gmail.com' ? 'bg-slate-800 text-amber-400' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
-                  {activeUser.name.charAt(0).toUpperCase()}
-                </div>
-                {sidebarOpen && (
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="text-sm font-bold text-slate-700 truncate">{activeUser.name}</span>
-                    <span className="text-xs text-slate-500 truncate">{activeUser.role}</span>
-                  </div>
-                )}
-              </div>
-              {sidebarOpen && <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors" title="Log Out"><LogOut className="w-4 h-4" /></button>}
+      {/* ── SIDEBAR NAVIGATION (Hidden on Landing Page) ── */}
+      {activeTab !== "landing" && (
+        <div className={`transition-all duration-300 ease-in-out border-r border-slate-200 bg-[#F8F9FA] flex flex-col flex-shrink-0 z-30 shadow-[2px_0_10px_rgba(0,0,0,0.02)] ${sidebarOpen ? 'w-64' : 'w-16'}`}>
+          
+          {/* Top Control Area */}
+          <div className="flex flex-col border-b border-slate-200/60 pb-2 mb-2">
+            <div className="flex items-center justify-between p-4">
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-500">
+                <Menu className="w-5 h-5" />
+              </button>
+              {sidebarOpen && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && (
+                <button onClick={startNewAudit} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500" title="New Audit"><Plus className="w-5 h-5" /></button>
+              )}
             </div>
-          ) : (
-            <button onClick={() => setShowAuthModal(true)} className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-slate-200 transition text-slate-600 ${!sidebarOpen && 'justify-center'}`}>
-              <User className="w-5 h-5 flex-shrink-0" />
-              {sidebarOpen && <span className="text-sm font-medium">Sign In</span>}
-            </button>
-          )}
-        </div>
-      </div>
+            
+            {/* The Back to Home Button inside the Sidebar */}
+            <div className="px-3">
+              <button 
+                onClick={() => navigateTo("landing")} 
+                className={`flex items-center gap-3 w-full p-2.5 rounded-xl transition text-sm font-bold text-slate-500 hover:text-amber-600 hover:bg-amber-50/50 ${!sidebarOpen && 'justify-center'}`}
+                title="Return to Landing Page"
+              >
+                <HomeIcon className="w-4 h-4 flex-shrink-0" />
+                {sidebarOpen && <span className="truncate">Home View</span>}
+              </button>
+            </div>
+            
+            {!sidebarOpen && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && (
+              <div className="flex flex-col items-center mt-2">
+                <button onClick={startNewAudit} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500" title="New Audit"><Plus className="w-5 h-5" /></button>
+              </div>
+            )}
+          </div>
 
-      {/* MAIN WORKSPACE OR ABOUT PAGE */}
+          {/* History List */}
+          <div className="flex-1 overflow-y-auto px-3">
+            {sidebarOpen && history.length > 0 && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-2 mt-2">Recent Records</div>}
+            {sidebarOpen && activeUser?.email !== "admin.iitjodpur.vidhivichara2026@gmail.com" && history.map((item) => (
+              <button key={item.id} title={item.title} onClick={() => loadHistoryItem(item)} className={`w-full text-left px-3 py-2 rounded-lg mb-1 truncate text-sm transition-colors flex items-center gap-3 ${currentSessionId === item.id && activeTab === "workspace" ? 'bg-amber-100/50 text-amber-900 font-medium' : 'text-slate-600 hover:bg-slate-200'}`}>
+                <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-50" />
+                <span className="truncate">{item.title}</span>
+              </button>
+            ))}
+          </div>
+          
+          {/* About Section Toggle */}
+          <div className="px-3 pb-2 pt-2 border-t border-slate-200/60">
+            <button 
+              onClick={() => { 
+                if (activeTab === "about") {
+                  navigateTo(previousTab);
+                } else {
+                  navigateTo("about"); 
+                }
+                if (window.innerWidth < 768) setSidebarOpen(false); 
+              }} 
+              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition text-sm font-bold ${activeTab === 'about' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs' : 'text-slate-600 hover:bg-slate-200/80'} ${!sidebarOpen && 'justify-center'}`}
+              title="About Framework"
+            >
+              <BookOpen className="w-4 h-4 flex-shrink-0 text-indigo-600" />
+              {sidebarOpen && <span className="truncate">About Framework</span>}
+            </button>
+          </div>
+
+          {/* User Profile */}
+          <div className="p-4 border-t border-slate-200">
+            {activeUser ? (
+              <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-inner ${activeUser.email === 'admin.iitjodpur.vidhivichara2026@gmail.com' ? 'bg-slate-800 text-amber-400' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
+                    {activeUser.name.charAt(0).toUpperCase()}
+                  </div>
+                  {sidebarOpen && (
+                    <div className="flex flex-col overflow-hidden">
+                      <span className="text-sm font-bold text-slate-700 truncate">{activeUser.name}</span>
+                      <span className="text-xs text-slate-500 truncate">{activeUser.role}</span>
+                    </div>
+                  )}
+                </div>
+                {sidebarOpen && <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors" title="Log Out"><LogOut className="w-4 h-4" /></button>}
+              </div>
+            ) : (
+              <button onClick={() => setShowAuthModal(true)} className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-slate-200 transition text-slate-600 ${!sidebarOpen && 'justify-center'}`}>
+                <User className="w-5 h-5 flex-shrink-0" />
+                {sidebarOpen && <span className="text-sm font-medium">Sign In</span>}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col relative h-full overflow-hidden items-center bg-white">
         
-        {activeTab === "about" ? (
-          /* ── EMBEDDED ABOUT PAGE WITH BACK BUTTON ── */
+        {activeTab === "landing" ? (
+          /* ── PREMIUM LIGHT MODE LANDING PAGE (Single Screen / No Scroll) ── */
+          <div className="w-full h-full bg-[#FAFAFA] text-slate-900 flex flex-col justify-between relative overflow-hidden selection:bg-amber-500/30">
+            {/* Ambient glowing background effects */}
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-amber-400/20 blur-[120px] rounded-full pointer-events-none"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-400/20 blur-[120px] rounded-full pointer-events-none"></div>
+            
+            {/* Navbar */}
+            <nav className="w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between relative z-10 flex-shrink-0">
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigateTo("landing")}>
+                <BrandLogo size={32} />
+                <span className="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-amber-800">Vidhi-Vichara</span>
+              </div>
+              <div className="flex items-center gap-4">
+                {activeUser ? (
+                  <button onClick={() => navigateTo("workspace")} className="text-xs font-bold bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800 transition active:scale-95 shadow-[0_0_20px_rgba(0,0,0,0.05)]">
+                    Enter Workspace
+                  </button>
+                ) : (
+                  <button onClick={() => setShowAuthModal(true)} className="text-xs font-bold bg-amber-500 text-white px-4 py-2 rounded-full hover:bg-amber-600 transition active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                    Sign In / Register
+                  </button>
+                )}
+              </div>
+            </nav>
+
+            {/* Hero Section */}
+            <main className="w-full max-w-7xl mx-auto px-6 flex-1 flex flex-col lg:flex-row items-center justify-between gap-8 relative z-10 my-auto">
+              <div className="flex-1 flex flex-col items-start text-left animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold tracking-widest uppercase mb-4 shadow-sm">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Enterprise Grade Compliance
+                </div>
+                <h1 className="text-4xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.1] mb-4">
+                  Algorithmic Precision for <br/>
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700">Indian Constitutional Law.</span>
+                </h1>
+                <p className="text-base lg:text-lg text-slate-600 leading-relaxed mb-6 max-w-xl font-medium">
+                  Bharat's first autonomous vires verification engine. Instantly audit legislative drafts against Schedule VII, detect jurisdictional overreach, and auto-remediate statutory conflicts in seconds.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  <button 
+                    onClick={() => {
+                      if(!activeUser) { setShowAuthModal(true); return; }
+                      navigateTo("workspace");
+                    }} 
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-full text-sm font-bold transition active:scale-95 shadow-[0_4px_20px_rgba(245,158,11,0.3)]"
+                  >
+                    Launch Core Engine <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => navigateTo("about")} 
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-6 py-3 rounded-full text-sm font-bold transition active:scale-95 shadow-sm"
+                  >
+                    Read Architecture
+                  </button>
+                </div>
+              </div>
+
+              {/* Decorative Visual Element */}
+              <div className="flex-1 w-full max-w-md relative animate-in fade-in slide-in-from-right-8 duration-700 delay-150">
+                <div className="absolute inset-0 bg-gradient-to-tr from-amber-400/20 to-emerald-400/20 blur-3xl rounded-full"></div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl relative z-10 overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-400">vidhi_vichara_inference.exe</div>
+                  </div>
+                  <div className="font-mono text-xs space-y-2">
+                    <p className="text-slate-500">&gt; Initializing Qdrant Vector Store...</p>
+                    <p className="text-emerald-600 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Baseline statutes loaded [Success]</p>
+                    <p className="text-slate-500">&gt; Parsing attached Draft Bill...</p>
+                    <p className="text-slate-500">&gt; Cross-referencing Schedule VII (Union List)...</p>
+                    <div className="bg-rose-50 border border-rose-100 p-2.5 rounded-lg mt-1.5">
+                      <p className="text-rose-700 font-bold flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> [T1] Ultra Vires Detection</p>
+                      <p className="text-rose-600/80 text-[11px] mt-0.5">State entity attempting to legislate on Central subject.</p>
+                    </div>
+                    <p className="text-slate-500 mt-1.5">&gt; Engaging Remediation LPU...</p>
+                    <p className="text-amber-600 flex items-center gap-1.5 animate-pulse"><Cpu className="w-3.5 h-3.5" /> Generating compliant draft...</p>
+                  </div>
+                </div>
+              </div>
+            </main>
+
+            {/* Trust Footer */}
+            <div className="w-full border-t border-slate-200 bg-white/60 backdrop-blur-md relative z-10 flex-shrink-0">
+              <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
+                <p>© 2026 Vidhi-Vichara Research Team</p>
+                <div className="flex items-center gap-6">
+                  <span className="flex items-center gap-1.5"><Database className="w-3.5 h-3.5 text-emerald-600" /> Qdrant Vector DB</span>
+                  <span className="flex items-center gap-1.5"><Cpu className="w-3.5 h-3.5 text-amber-600" /> Llama-3 70B Engine</span>
+                  <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> Supabase SecOps</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === "about" ? (
+          /* ── EMBEDDED ABOUT PAGE WITH DYNAMIC BACK BUTTON ── */
           <div className="w-full h-full flex flex-col">
             
             <div className="w-full border-b border-slate-200/80 bg-white/50 backdrop-blur-md px-8 py-4 flex items-center justify-between sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-              <button onClick={() => setActiveTab("workspace")} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition active:scale-95">
-                <ArrowLeft className="w-4 h-4" /> Back to Workspace
+              {/* Dynamic Back button: Routes user back to wherever they came from */}
+              <button onClick={() => navigateTo(previousTab)} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition active:scale-95">
+                <ArrowLeft className="w-4 h-4" /> Back to {previousTab === "landing" ? "Home" : "Workspace"}
               </button>
               <span className="text-xs font-bold uppercase tracking-widest text-slate-400 hidden sm:block">Mission & Architecture</span>
               <div className="w-[120px] hidden sm:block"></div> 
@@ -649,7 +819,7 @@ export default function Home() {
               </div>
             ) : !result ? (
               // UPLOAD VIEW
-              <div className="w-full max-w-2xl flex flex-col items-center justify-center mt-12">
+              <div className="w-full max-w-2xl flex flex-col items-center justify-center mt-12 animate-in fade-in zoom-in-95 duration-500">
                 <div className="flex flex-col items-center mb-12 text-center">
                   <div className="mb-6"><BrandLogo size={56} /></div>
                   <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Vidhi-Vichara</h1>
