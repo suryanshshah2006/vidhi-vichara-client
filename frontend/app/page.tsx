@@ -23,7 +23,7 @@ export default function Home() {
   
   // ── VIEW CONTROLLER & ROUTING HISTORY ──
   const [activeTab, setActiveTab] = useState<"landing" | "workspace" | "about">("landing");
-  const [previousTab, setPreviousTab] = useState<"landing" | "workspace">("landing"); // Remembers where user came from
+  const [previousTab, setPreviousTab] = useState<"landing" | "workspace">("landing");
 
   const [activeUser, setActiveUser] = useState<{ name: string, email: string, role: string, token: string } | null>(null);
   
@@ -64,13 +64,11 @@ export default function Home() {
 
   // ── NATIVE BROWSER ROUTING HANDLER ──
   const navigateTo = (newTab: "landing" | "workspace" | "about") => {
-    // If going to About page, remember where they came from
     if (newTab === "about" && activeTab !== "about") {
       setPreviousTab(activeTab as "landing" | "workspace");
     }
     setActiveTab(newTab);
     
-    // Sync with Browser History (Chrome Back/Forward buttons)
     if (typeof window !== "undefined") {
       window.history.pushState({ tab: newTab }, "", `?view=${newTab}`);
     }
@@ -79,7 +77,6 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true);
 
-    // Initialize Chrome History state to prevent first back-click from leaving site
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const view = urlParams.get("view") as "landing" | "workspace" | "about";
@@ -90,7 +87,6 @@ export default function Home() {
         window.history.replaceState({ tab: "landing" }, "", `?view=landing`);
       }
 
-      // Listen for Chrome Native Back Button
       const handlePopState = (event: PopStateEvent) => {
         if (event.state && event.state.tab) {
           setActiveTab(event.state.tab);
