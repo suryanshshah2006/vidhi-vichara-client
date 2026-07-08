@@ -35,13 +35,21 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app = FastAPI(title="Vidhi-Vichara Enterprise Core")
 
-# ── SECURE CORS POLICY ──
+# ── SECURE CORS POLICY (UPDATED WITH ALL PRODUCTION DOMAINS) ──
+allowed_origins = [
+    FRONTEND_URL,
+    "http://localhost:3000",
+    "https://vidhivichara.in",
+    "https://www.vidhivichara.in",
+    "https://vidhivichara.netlify.app"
+]
+
 app.add_middleware(
     CORSMiddleware, 
-    allow_origins=[FRONTEND_URL, "http://localhost:3000"], 
+    allow_origins=allowed_origins, 
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"], 
-    allow_headers=["Authorization", "Content-Type"] 
+    allow_methods=["*"], 
+    allow_headers=["*"] 
 )
 
 security = HTTPBearer()
