@@ -350,16 +350,16 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
-  // ── REFACTORED PDF DOWNLOAD: HEX COLORS & FORCED AUTO-FETCH ──
+  // ── REFACTORED PDF DOWNLOAD: GUARANTEED FETCH & EXACT HEX COLORS ──
   const triggerPdfDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
       setLoading(true);
 
-      // --- BULLETPROOF AUTO-FETCH ---
-      // If the user hasn't generated the drafting notes yet, this explicitly awaits it.
+      // --- GUARANTEED AUTO-FETCH FOR SECTION 4 ---
       let finalDraft = draftResult;
-      if (!finalDraft && result?.violating_quote && result.violating_quote !== "None") {
+      // If we don't have the draft yet, and there's an actual violation to fix...
+      if (!finalDraft && result?.violating_quote && result.violating_quote !== "None" && result.band !== 'Green') {
         try {
           const fd = new FormData();
           fd.append("flagged_clause", result.violating_quote);
@@ -370,7 +370,7 @@ export default function Home() {
           });
           if (res.ok) {
             finalDraft = await res.json();
-            setDraftResult(finalDraft);
+            setDraftResult(finalDraft); // Updates UI in the background
           }
         } catch (e) {
           console.error("Auto-fetch for Draftsman failed during PDF generation:", e);
@@ -384,21 +384,21 @@ export default function Home() {
       const margin = 20;
 
       const drawBorder = () => {
-        doc.setDrawColor("#323232"); doc.setLineWidth(0.5);
+        doc.setDrawColor("#333333"); doc.setLineWidth(0.5);
         doc.rect(margin - 5, margin - 5, pageWidth - (margin * 2) + 10, pageHeight - (margin * 2) + 10);
         doc.setLineWidth(0.1); doc.rect(margin - 3, margin - 3, pageWidth - (margin * 2) + 6, pageHeight - (margin * 2) + 6);
       };
 
       const addHeader = (text: string, y: number) => {
         if (y > pageHeight - 30) { doc.addPage(); drawBorder(); y = margin + 10; }
-        doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor("#646464"); doc.text(text, margin, y);
-        doc.setDrawColor("#c8c8c8"); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 12; 
+        doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor("#64748b"); doc.text(text, margin, y);
+        doc.setDrawColor("#cbd5e1"); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 12; 
       };
 
       drawBorder();
-      doc.setFont("times", "bold"); doc.setFontSize(22); doc.setTextColor("#1e293b");
+      doc.setFont("times", "bold"); doc.setFontSize(22); doc.setTextColor("#0f172a");
       doc.text("VIDHI-VICHARA ALIGNMENT REPORT", pageWidth / 2, 35, { align: "center" });
-      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor("#646464");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor("#64748b");
       doc.text("Professional Vires & Statutory Compliance Audit", pageWidth / 2, 43, { align: "center" });
 
       let yPos = 65; 
@@ -441,10 +441,10 @@ export default function Home() {
 
       yPos = addHeader("SECTION 3 · AUDIT & DEFECT MATRIX", yPos);
       
-      // FLAGGED PASSAGE (Strict HEX Colors)
+      // FLAGGED PASSAGE (Light Red BG, Dark Red Text)
       if (result.violating_quote && result.violating_quote !== "None") {
-        doc.setFillColor("#fef2f2"); // Light Red
-        doc.setDrawColor("#fca5a5"); 
+        doc.setFillColor("#fef2f2"); // Tailwind red-50
+        doc.setDrawColor("#fca5a5"); // Tailwind red-300
         doc.setLineWidth(0.5);
         const issueText = `FLAGGED PASSAGE:\n"${result.violating_quote}"\n\nDEFECT ANALYSIS:\n${result.explanation || "No explanation provided."}`;
         const issueLines = doc.splitTextToSize(issueText, pageWidth - (margin * 2) - 10);
@@ -453,16 +453,16 @@ export default function Home() {
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
         
-        doc.setTextColor("#991b1b"); // Dark Red
+        doc.setTextColor("#991b1b"); // Tailwind red-800
         doc.setFontSize(9.5);
         doc.text(issueLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 8;
       }
 
-      // RECOMMENDED CORRECTION (Strict HEX Colors)
+      // RECOMMENDED CORRECTION (Light Green BG, Dark Green Text)
       if (result.suggested_fix && result.suggested_fix !== "None") {
-        doc.setFillColor("#f0fdf4"); // Light Green
-        doc.setDrawColor("#86efac"); 
+        doc.setFillColor("#f0fdf4"); // Tailwind green-50
+        doc.setDrawColor("#86efac"); // Tailwind green-300
         doc.setLineWidth(0.5);
         const fixText = `CONSULTANT RECOMMENDED CORRECTION:\n${result.suggested_fix}`;
         const fixLines = doc.splitTextToSize(fixText, pageWidth - (margin * 2) - 10);
@@ -471,45 +471,47 @@ export default function Home() {
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
         
-        doc.setTextColor("#166534"); // Dark Green
+        doc.setTextColor("#166534"); // Tailwind green-800
         doc.setFontSize(9.5);
         doc.text(fixLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 16;
       }
 
-      // SECTION 4 - AUTONOMOUS REMEDIATION (Always Prints)
-      yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
-      
-      doc.setFillColor("#f8fafc"); // Light Blue/Gray
-      doc.setDrawColor("#cbd5e1"); 
-      doc.setLineWidth(0.5);
-      
-      let draftText = "";
-      if (finalDraft) {
-        draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraft.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraft.drafting_notes}`;
-      } else {
-        draftText = `COMPLIANT DRAFT REWRITE:\n[Notice: The drafting engine could not automatically generate a rewrite during PDF export due to an API timeout. Please launch the Deep Draftsman AI manually in the workspace to view the compliant draft.]`;
-      }
-      
-      const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
-      const boxHeight4 = (draftLines.length * 5) + 12;
+      // SECTION 4 - AUTONOMOUS REMEDIATION (Light Slate BG, Dark Slate Text)
+      if (result.band !== 'Green') {
+        yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
+        
+        doc.setFillColor("#f8fafc"); // Tailwind slate-50
+        doc.setDrawColor("#cbd5e1"); // Tailwind slate-300
+        doc.setLineWidth(0.5);
+        
+        let draftText = "";
+        if (finalDraft) {
+          draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraft.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraft.drafting_notes}`;
+        } else {
+          draftText = `[Notice: The drafting engine could not automatically generate a rewrite during PDF export due to an API error. Please launch the Deep Draftsman AI manually in the workspace.]`;
+        }
+        
+        const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
+        const boxHeight4 = (draftLines.length * 5) + 12;
 
-      if (yPos + boxHeight4 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-      doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "FD");
-      
-      doc.setTextColor("#1e293b"); // Dark Slate
-      doc.setFontSize(9.5);
-      doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
-      yPos += boxHeight4 + 16;
+        if (yPos + boxHeight4 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "FD");
+        
+        doc.setTextColor("#0f172a"); // Tailwind slate-900
+        doc.setFontSize(9.5);
+        doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
+        yPos += boxHeight4 + 16;
+      }
 
       if (yPos + 60 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
       
       yPos = addHeader("APPENDIX A · STATUTORY TAXONOMY & SEVERITY LEGEND", yPos);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor("#323232");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor("#333333");
       doc.text("DEVIATION CODES (T):", margin, yPos);
       doc.text("SEVERITY SCALE (S):", margin + 100, yPos);
       
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor("#505050");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor("#475569");
       const tCodes = [
         "T1: Ultra Vires (Schedule VII List Overreach)",
         "T2: Procedural Gateway Non-Compliance",
@@ -527,7 +529,7 @@ export default function Home() {
       tCodes.forEach((tc, i) => doc.text(tc, margin, yPos + 6 + (i * 5)));
       sCodes.forEach((sc, i) => doc.text(sc, margin + 100, yPos + 6 + (i * 5)));
 
-      doc.setFontSize(8); doc.setTextColor("#969696");
+      doc.setFontSize(8); doc.setTextColor("#94a3b8");
       doc.text("CONFIDENTIAL - AUTOMATED VIRES ASSESSMENT", pageWidth / 2, pageHeight - 12, { align: "center" });
 
       doc.save(`VVAR_${result.detected_act?.substring(0, 15).replace(/[^a-zA-Z0-9]/g, "_") || "Report"}_${Date.now()}.pdf`);
@@ -1038,7 +1040,7 @@ export default function Home() {
                     <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
                       <button onClick={triggerPdfDownload} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 px-5 py-2.5 rounded-xl transition border border-slate-200 shadow-sm active:scale-95">
                         {loading ? (
-                          <><RefreshCw className="w-4 h-4 animate-spin"/> Generating Report...</>
+                          <><RefreshCw className="w-4 h-4 animate-spin"/> Exporting...</>
                         ) : (
                           <><Download className="w-4 h-4"/> Export Executive PDF</>
                         )}
