@@ -43,6 +43,8 @@ export default function Home() {
   
   const [history, setHistory] = useState<any[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // Add state to store the current active chat title
+  const [activeChatTitle, setActiveChatTitle] = useState<string | null>(null);
 
   const [inputText, setInputText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -98,6 +100,22 @@ export default function Home() {
       return () => window.removeEventListener("popstate", handlePopState);
     }
   }, []);
+
+  // ── DYNAMIC TITLE UPDATER ──
+  useEffect(() => {
+    if (activeTab === 'landing') {
+      document.title = 'Vidhi-Vichara';
+    } 
+    else if (activeTab === 'about') {
+      document.title = 'About Framework | Vidhi-Vichara';
+    } 
+    else if (activeTab === 'workspace' && result && activeChatTitle) {
+      document.title = `${activeChatTitle} | Vidhi-Vichara`;
+    } 
+    else {
+      document.title = 'Vidhi-Vichara';
+    }
+  }, [activeTab, result, activeChatTitle]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -235,6 +253,7 @@ export default function Home() {
     setFile(null); 
     setInputText(""); 
     setCurrentSessionId(null); 
+    setActiveChatTitle(null);
     if (window.innerWidth < 768) setSidebarOpen(false); 
   };
   
@@ -242,6 +261,7 @@ export default function Home() {
     navigateTo("workspace");
     setResult(item.result); 
     setCurrentSessionId(item.id); 
+    setActiveChatTitle(item.title);
     setInputText(""); 
     setFile(null); 
     if (window.innerWidth < 768) setSidebarOpen(false); 
@@ -317,6 +337,7 @@ export default function Home() {
       
       const newSessionId = Date.now().toString();
       const detectedActTitle = data.detected_act && data.detected_act !== "Unknown" ? data.detected_act : "Unclassified Draft";
+      setActiveChatTitle(detectedActTitle);
 
       if (activeUser) {
         await supabase.from("user_history").insert({ user_email: activeUser.email, session_id: newSessionId, title: detectedActTitle, result_json: sessionResult });
