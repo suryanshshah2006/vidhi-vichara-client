@@ -43,7 +43,6 @@ export default function Home() {
   
   const [history, setHistory] = useState<any[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  // Add state to store the current active chat title
   const [activeChatTitle, setActiveChatTitle] = useState<string | null>(null);
 
   const [inputText, setInputText] = useState("");
@@ -351,11 +350,33 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
-  // ── REFACTORED PDF DOWNLOAD FOR HIGH CONTRAST & DRAFTING NOTES ──
+  // ── REFACTORED PDF DOWNLOAD FOR HIGH CONTRAST & AUTO-FETCH DRAFTSMAN ──
   const triggerPdfDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
       setLoading(true);
+
+      // --- NEW LOGIC: AUTO-FETCH DEEP DRAFTSMAN IF NOT ALREADY RUN ---
+      let finalDraftResult = draftResult;
+      if (!finalDraftResult && result?.violating_quote && result.violating_quote !== "None") {
+        try {
+          const formData = new FormData();
+          formData.append("flagged_clause", result.violating_quote);
+          const response = await fetch(`${API_BASE_URL}/api/remediate`, { 
+            method: "POST", 
+            headers: { "Authorization": `Bearer ${activeUser.token}` }, 
+            body: formData 
+          });
+          if (response.ok) {
+            finalDraftResult = await response.json();
+            setDraftResult(finalDraftResult); // Also populate UI in background
+          }
+        } catch (e) {
+          console.error("Auto-fetch for Draftsman failed during PDF generation:", e);
+        }
+      }
+      // ---------------------------------------------------------------
+
       const { jsPDF } = await import("jspdf");
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -420,46 +441,58 @@ export default function Home() {
 
       yPos = addHeader("SECTION 3 · AUDIT & DEFECT MATRIX", yPos);
       
+      // FLAGGED PASSAGE (Red Box)
       if (result.violating_quote && result.violating_quote !== "None") {
-        doc.setFillColor(254, 242, 242); doc.setDrawColor(252, 165, 165); doc.setLineWidth(0.5);
+        doc.setFillColor(254, 242, 242); 
+        doc.setDrawColor(252, 165, 165); 
+        doc.setLineWidth(0.5);
         const issueText = `FLAGGED PASSAGE:\n"${result.violating_quote}"\n\nDEFECT ANALYSIS:\n${result.explanation || "No explanation provided."}`;
         const issueLines = doc.splitTextToSize(issueText, pageWidth - (margin * 2) - 10);
         const boxHeight = (issueLines.length * 5) + 12;
         
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
-        // FIX: High contrast pure black text, larger font
-        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
+        
+        doc.setTextColor(80, 0, 0); 
+        doc.setFontSize(9.5);
         doc.text(issueLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 8;
       }
 
+      // RECOMMENDED CORRECTION (Green Box)
       if (result.suggested_fix && result.suggested_fix !== "None") {
-        doc.setFillColor(240, 253, 244); doc.setDrawColor(134, 239, 172); doc.setLineWidth(0.5);
+        doc.setFillColor(240, 253, 244); 
+        doc.setDrawColor(134, 239, 172); 
+        doc.setLineWidth(0.5);
         const fixText = `CONSULTANT RECOMMENDED CORRECTION:\n${result.suggested_fix}`;
         const fixLines = doc.splitTextToSize(fixText, pageWidth - (margin * 2) - 10);
         const boxHeight = (fixLines.length * 5) + 12;
 
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
-        // FIX: High contrast pure black text, larger font
-        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
+        
+        doc.setTextColor(0, 70, 0); 
+        doc.setFontSize(9.5);
         doc.text(fixLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 16;
       }
 
-      // NEW FIX: Inject the Deep Draftsman AI output if it was generated
-      if (draftResult) {
+      // SECTION 4 - AUTONOMOUS REMEDIATION (Blue/Gray Box)
+      if (finalDraftResult) {
         yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
         
-        doc.setFillColor(248, 250, 252); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.5);
-        const draftText = `COMPLIANT DRAFT REWRITE:\n${draftResult.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${draftResult.drafting_notes}`;
+        doc.setFillColor(248, 250, 252); 
+        doc.setDrawColor(203, 213, 225); 
+        doc.setLineWidth(0.5);
+        const draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraftResult.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraftResult.drafting_notes}`;
         const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
         const boxHeight = (draftLines.length * 5) + 12;
 
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
-        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
+        
+        doc.setTextColor(30, 41, 59); 
+        doc.setFontSize(9.5);
         doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 16;
       }
@@ -999,7 +1032,11 @@ export default function Home() {
 
                     <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
                       <button onClick={triggerPdfDownload} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 px-5 py-2.5 rounded-xl transition border border-slate-200 shadow-sm active:scale-95">
-                        <Download className="w-4 h-4"/> Export Executive PDF
+                        {loading ? (
+                          <><RefreshCw className="w-4 h-4 animate-spin"/> Generating Report...</>
+                        ) : (
+                          <><Download className="w-4 h-4"/> Export Executive PDF</>
+                        )}
                       </button>
                     </div>
 
