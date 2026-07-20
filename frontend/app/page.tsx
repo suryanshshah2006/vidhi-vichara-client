@@ -350,19 +350,19 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
-  // ── REFACTORED PDF DOWNLOAD: GUARANTEED FETCH & EXACT HEX COLORS ──
+  // ── COMPLETELY REWRITTEN PDF LOGIC (NO BACKGROUND FILLS, GUARANTEED API FETCH) ──
   const triggerPdfDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
       setLoading(true);
 
-      // --- GUARANTEED AUTO-FETCH FOR SECTION 4 ---
+      // --- CRITICAL FIX: FORCED AWAIT FOR DRAFTSMAN API ---
       let finalDraft = draftResult;
-      // If we don't have the draft yet, and there's an actual violation to fix...
-      if (!finalDraft && result?.violating_quote && result.violating_quote !== "None" && result.band !== 'Green') {
+      if (!finalDraft && result?.violating_quote && result.violating_quote !== "None") {
         try {
           const fd = new FormData();
           fd.append("flagged_clause", result.violating_quote);
+          // This will explicitly pause the PDF generation until the AI returns
           const res = await fetch(`${API_BASE_URL}/api/remediate`, { 
             method: "POST", 
             headers: { "Authorization": `Bearer ${activeUser.token}` }, 
@@ -370,10 +370,10 @@ export default function Home() {
           });
           if (res.ok) {
             finalDraft = await res.json();
-            setDraftResult(finalDraft); // Updates UI in the background
+            setDraftResult(finalDraft); // Save to state so it shows in UI later
           }
         } catch (e) {
-          console.error("Auto-fetch for Draftsman failed during PDF generation:", e);
+          console.error("Auto-fetch for Draftsman failed:", e);
         }
       }
 
@@ -384,26 +384,26 @@ export default function Home() {
       const margin = 20;
 
       const drawBorder = () => {
-        doc.setDrawColor("#333333"); doc.setLineWidth(0.5);
+        doc.setDrawColor(50, 50, 50); doc.setLineWidth(0.5);
         doc.rect(margin - 5, margin - 5, pageWidth - (margin * 2) + 10, pageHeight - (margin * 2) + 10);
         doc.setLineWidth(0.1); doc.rect(margin - 3, margin - 3, pageWidth - (margin * 2) + 6, pageHeight - (margin * 2) + 6);
       };
 
       const addHeader = (text: string, y: number) => {
         if (y > pageHeight - 30) { doc.addPage(); drawBorder(); y = margin + 10; }
-        doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor("#64748b"); doc.text(text, margin, y);
-        doc.setDrawColor("#cbd5e1"); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 12; 
+        doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(100, 100, 100); doc.text(text, margin, y);
+        doc.setDrawColor(200, 200, 200); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 12; 
       };
 
       drawBorder();
-      doc.setFont("times", "bold"); doc.setFontSize(22); doc.setTextColor("#0f172a");
+      doc.setFont("times", "bold"); doc.setFontSize(22); doc.setTextColor(30, 41, 59);
       doc.text("VIDHI-VICHARA ALIGNMENT REPORT", pageWidth / 2, 35, { align: "center" });
-      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor("#64748b");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(100, 100, 100);
       doc.text("Professional Vires & Statutory Compliance Audit", pageWidth / 2, 43, { align: "center" });
 
       let yPos = 65; 
       yPos = addHeader("SECTION 1 · METADATA & IDENTIFICATION", yPos);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor("#000000");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
       
       const idData = [
         ["Audit Reference ID:", `VVAR-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`],
@@ -423,83 +423,82 @@ export default function Home() {
 
       yPos += 8; 
       yPos = addHeader("SECTION 2 · EXECUTIVE SCORING", yPos);
-      doc.setFillColor("#f8fafc"); doc.setDrawColor("#e2e8f0");
-      doc.rect(margin, yPos, pageWidth - (margin * 2), 32, "FD");
       
-      doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text("COMPOSITE VVAI SCORE:", margin + 5, yPos + 10);
-      doc.setFontSize(14); doc.setTextColor("#d97706"); doc.text(`${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00`, margin + 60, yPos + 10);
+      // Removed FD fill, using S (Stroke) for borders to prevent black boxes
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(margin, yPos, pageWidth - (margin * 2), 32, "S");
       
-      doc.setFontSize(10); doc.setTextColor("#000000"); doc.text("DEVIATION BAND:", margin + 105, yPos + 10);
+      doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text("COMPOSITE VVAI SCORE:", margin + 5, yPos + 10);
+      doc.setFontSize(14); doc.setTextColor(217, 119, 6); doc.text(`${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00`, margin + 60, yPos + 10);
+      
+      doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.text("DEVIATION BAND:", margin + 105, yPos + 10);
       const isGreen = result.band === 'Green';
-      doc.setTextColor(isGreen ? "#16a34a" : "#dc2626");
+      doc.setTextColor(isGreen ? 22 : 220, isGreen ? 163 : 38, isGreen ? 74 : 38);
       doc.text((result.band || "UNKNOWN").toUpperCase(), margin + 140, yPos + 10);
 
-      doc.setTextColor("#000000"); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+      doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
       doc.text(`Taxonomy Code: [ ${result.deviation_type || "None"} ]   |   Severity Level: [ ${result.severity || "None"} ]`, margin + 5, yPos + 23);
 
       yPos += 46;
 
       yPos = addHeader("SECTION 3 · AUDIT & DEFECT MATRIX", yPos);
       
-      // FLAGGED PASSAGE (Light Red BG, Dark Red Text)
+      // FLAGGED PASSAGE (Red Outline, White BG, Black Text)
       if (result.violating_quote && result.violating_quote !== "None") {
-        doc.setFillColor("#fef2f2"); // Tailwind red-50
-        doc.setDrawColor("#fca5a5"); // Tailwind red-300
+        doc.setDrawColor(220, 38, 38); // Red border
         doc.setLineWidth(0.5);
         const issueText = `FLAGGED PASSAGE:\n"${result.violating_quote}"\n\nDEFECT ANALYSIS:\n${result.explanation || "No explanation provided."}`;
         const issueLines = doc.splitTextToSize(issueText, pageWidth - (margin * 2) - 10);
         const boxHeight = (issueLines.length * 5) + 12;
         
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "S"); // S = Stroke only
         
-        doc.setTextColor("#991b1b"); // Tailwind red-800
-        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0); // Pure Black
+        doc.setFontSize(10);
         doc.text(issueLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 8;
       }
 
-      // RECOMMENDED CORRECTION (Light Green BG, Dark Green Text)
+      // RECOMMENDED CORRECTION (Green Outline, White BG, Black Text)
       if (result.suggested_fix && result.suggested_fix !== "None") {
-        doc.setFillColor("#f0fdf4"); // Tailwind green-50
-        doc.setDrawColor("#86efac"); // Tailwind green-300
+        doc.setDrawColor(22, 163, 74); // Green border
         doc.setLineWidth(0.5);
         const fixText = `CONSULTANT RECOMMENDED CORRECTION:\n${result.suggested_fix}`;
         const fixLines = doc.splitTextToSize(fixText, pageWidth - (margin * 2) - 10);
         const boxHeight = (fixLines.length * 5) + 12;
 
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "S"); // S = Stroke only
         
-        doc.setTextColor("#166534"); // Tailwind green-800
-        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0); // Pure Black
+        doc.setFontSize(10);
         doc.text(fixLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 16;
       }
 
-      // SECTION 4 - AUTONOMOUS REMEDIATION (Light Slate BG, Dark Slate Text)
-      if (result.band !== 'Green') {
+      // SECTION 4 - AUTONOMOUS REMEDIATION (Blue Outline, White BG, Black Text)
+      if (result.violating_quote && result.violating_quote !== "None") {
         yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
         
-        doc.setFillColor("#f8fafc"); // Tailwind slate-50
-        doc.setDrawColor("#cbd5e1"); // Tailwind slate-300
+        doc.setDrawColor(37, 99, 235); // Blue Border
         doc.setLineWidth(0.5);
         
         let draftText = "";
         if (finalDraft) {
           draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraft.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraft.drafting_notes}`;
         } else {
-          draftText = `[Notice: The drafting engine could not automatically generate a rewrite during PDF export due to an API error. Please launch the Deep Draftsman AI manually in the workspace.]`;
+          draftText = `COMPLIANT DRAFT REWRITE:\n[Error: The drafting engine could not automatically generate a rewrite during PDF export. Please verify backend connection.]`;
         }
         
         const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
         const boxHeight4 = (draftLines.length * 5) + 12;
 
         if (yPos + boxHeight4 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "FD");
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "S"); // S = Stroke only
         
-        doc.setTextColor("#0f172a"); // Tailwind slate-900
-        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0); // Pure Black
+        doc.setFontSize(10);
         doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight4 + 16;
       }
@@ -507,11 +506,11 @@ export default function Home() {
       if (yPos + 60 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
       
       yPos = addHeader("APPENDIX A · STATUTORY TAXONOMY & SEVERITY LEGEND", yPos);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor("#333333");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
       doc.text("DEVIATION CODES (T):", margin, yPos);
       doc.text("SEVERITY SCALE (S):", margin + 100, yPos);
       
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor("#475569");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(80, 80, 80);
       const tCodes = [
         "T1: Ultra Vires (Schedule VII List Overreach)",
         "T2: Procedural Gateway Non-Compliance",
@@ -529,7 +528,7 @@ export default function Home() {
       tCodes.forEach((tc, i) => doc.text(tc, margin, yPos + 6 + (i * 5)));
       sCodes.forEach((sc, i) => doc.text(sc, margin + 100, yPos + 6 + (i * 5)));
 
-      doc.setFontSize(8); doc.setTextColor("#94a3b8");
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150);
       doc.text("CONFIDENTIAL - AUTOMATED VIRES ASSESSMENT", pageWidth / 2, pageHeight - 12, { align: "center" });
 
       doc.save(`VVAR_${result.detected_act?.substring(0, 15).replace(/[^a-zA-Z0-9]/g, "_") || "Report"}_${Date.now()}.pdf`);
