@@ -12,6 +12,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 
 from qdrant_client import QdrantClient
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain_groq import ChatGroq
@@ -28,14 +29,13 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
-# ── FIXED: Added rstrip('/') to prevent double-slash bugs ──
 raw_sub_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL") or ""
 SUPABASE_URL = raw_sub_url.rstrip("/")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000") 
 
 app = FastAPI(title="Vidhi-Vichara Enterprise Core")
 
-# ── SECURE CORS POLICY (UPDATED WITH ALL PRODUCTION DOMAINS) ──
+# ── SECURE CORS POLICY ──
 allowed_origins = [
     FRONTEND_URL,
     "http://localhost:3000",
@@ -54,31 +54,23 @@ app.add_middleware(
 
 security = HTTPBearer()
 
-# ── LOCAL JWKS CLIENT SETUP (OFFICIAL SUPABASE PATH) ──
+# ── AUTHENTICATION ──
 JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 jwks_client = PyJWKClient(JWKS_URL)
 
-# ── BULLETPROOF SUPABASE VERIFICATION (HANDLES ECC ROTATION) ──
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     raw_token = credentials.credentials
     try:
-        # Dynamically grab the public key that matches the ECC token header
         signing_key = jwks_client.get_signing_key_from_jwt(raw_token)
-        
-        # Decode using the modern ES256 algorithm
         payload = jwt.decode(
             raw_token, 
             signing_key.key, 
             algorithms=["ES256", "RS256", "HS256"], 
             audience="authenticated"
         )
-        
-        # Extract user email and assign RBAC roles
         email = payload.get("email", "unknown_user")
         role = "Administrator" if email == "admin.iitjodpur.vidhivichara2026@gmail.com" else "Verified User"
-        
         return {"role": role, "email": email}
-        
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired. Please log in again.")
     except Exception as e:
@@ -88,7 +80,6 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
 # ── AI ENGINE CONFIGURATION ──
 q_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60.0)
 
-# Replaced local PyTorch model with cloud endpoint to prevent 512MB RAM crash on Render
 embeddings = HuggingFaceEndpointEmbeddings(
     model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN
@@ -102,14 +93,11 @@ You are an expert Indian Constitutional Law AI. Evaluate the vires, scope, and c
 
 USER'S SELECTED JURISDICTION FROM UI: **{jurisdiction}**
 
-STEP 1: INDEPENDENT CLASSIFICATION
-Determine if this is inherently a Central or State Act. If State, name the specific State.
-STEP 2: MISMATCH DETECTION
-Compare findings to User Jurisdiction ({jurisdiction}). Flag cross-over errors as 'Jurisdictional Overreach'.
+CRITICAL RULE: Check for jurisdictional conflicts. If a state law clause directly contradicts, bypasses, or adds strict compliance steps beyond a Central Act framework, explicitly flag this as "Jurisdictional Overreach" in the explanation.
 
 OUTPUT STRICTLY AS A VALID JSON OBJECT.
 {{
-  "detected_parent_act": "Extract the specific parent Act name from the text (e.g., 'Information Technology Act, 2000') or 'General Law'",
+  "detected_parent_act": "Extract the specific parent Act name from the text or 'General Law'",
   "detected_jurisdiction": "Central" | "State" | "Unknown",
   "detected_state": "Name of State or 'N/A'",
   "jurisdiction_mismatch": true | false,
@@ -119,7 +107,7 @@ OUTPUT STRICTLY AS A VALID JSON OBJECT.
   "deviation_type": "T1|T2|T3|T4|T5|Jurisdictional Overreach|None", 
   "severity": "S1|S2|S3|S4|Critical|None",
   "violating_quote": "Extract exact violating text.",
-  "explanation": "Assessment summary.", 
+  "explanation": "Assessment summary detailing specific Acts cited and any jurisdictional overlaps.", 
   "suggested_fix": "Remediation guide."
 }}
 Context: {context}"""
@@ -128,7 +116,7 @@ prompt = ChatPromptTemplate.from_messages([("system", vvai_prompt), ("human", "P
 
 remediate_prompt_template = """\
 You are an expert Parliamentary Draftsman specializing in Indian Constitutional Law. 
-You are given a 'Flagged Clause' that has been marked as a Jurisdictional Overreach violation because a State entity tried to legislate on a Central subject, or vice versa.
+You are given a 'Flagged Clause' that has been marked as a Jurisdictional Overreach violation.
 
 Your task is to completely rewrite this clause to bring it into absolute harmony with the Indian Constitution, while preserving the user's core intent.
 
@@ -142,9 +130,16 @@ OUTPUT STRICTLY AS A VALID JSON OBJECT:
 remediate_prompt = ChatPromptTemplate.from_messages([("system", remediate_prompt_template)])
 
 def format_docs(docs): 
-    return "\n\n".join(f"[Act: {d.metadata.get('act_name', d.metadata.get('source', 'Unknown Act'))}]\n{d.page_content}" for d in docs)
+    context_blocks = []
+    for idx, d in enumerate(docs):
+        meta = d.metadata
+        jur = meta.get('jurisdiction', 'Unknown')
+        act = meta.get('act_name', 'Unknown Act')
+        state = meta.get('state_name', 'N/A')
+        source_tag = f"[{jur} Law | Act: {act} | Region: {state}]"
+        context_blocks.append(f"Source {idx+1}: {source_tag}\nStatute Text:\n{d.page_content}")
+    return "\n\n".join(context_blocks)
 
-# ── BULLETPROOF EXTRACTOR (.pdf, .txt, .docx with Tables) ──
 def extract_text(file_bytes: bytes, filename: str) -> str:
     text = ""
     filename = filename.lower()
@@ -184,8 +179,27 @@ async def run_audit(jurisdiction: str = Form(...), target_act: str = Form(...), 
         rule_text = extract_text(file_bytes, file.filename)
         if not rule_text.strip(): raise ValueError("Document is empty.")
 
+        ui_jurisdiction = jurisdiction.title()
+        
+        # 🔥 SMART FILTERING: If state is selected, fetch Central AND that State's laws
+        search_filter = None
+        if ui_jurisdiction and ui_jurisdiction != "Central" and ui_jurisdiction != "Unknown":
+            search_filter = Filter(
+                should=[
+                    FieldCondition(key="metadata.jurisdiction", match=MatchValue(value="Central")),
+                    FieldCondition(key="metadata.state_name", match=MatchValue(value=ui_jurisdiction))
+                ]
+            )
+        else:
+            # Central only fallback
+            search_filter = Filter(
+                must=[
+                    FieldCondition(key="metadata.jurisdiction", match=MatchValue(value="Central"))
+                ]
+            )
+
         detected_act = target_act
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": search_filter})
         retrieved_docs = retriever.invoke(rule_text[:1500])
         
         if target_act == "AUTO_DETECT":
@@ -197,14 +211,14 @@ async def run_audit(jurisdiction: str = Form(...), target_act: str = Form(...), 
             else:
                 if retrieved_docs:
                     meta = retrieved_docs[0].metadata
-                    raw_name = meta.get("act_name") or meta.get("source") or meta.get("title") or meta.get("file_name") or "General Law"
+                    raw_name = meta.get("act_name") or meta.get("source") or "General Law"
                     detected_act = "General Law" if raw_name == "General Law" else os.path.basename(raw_name).replace(".pdf", "").replace(".txt", "").replace("_", " ").title()
                 else:
                     detected_act = "General Law"
 
         context_str = format_docs(retrieved_docs)
         chain = prompt | llm | StrOutputParser()
-        raw_result = chain.invoke({"jurisdiction": jurisdiction.title(), "context": context_str, "input": rule_text[:5000]})
+        raw_result = chain.invoke({"jurisdiction": ui_jurisdiction, "context": context_str, "input": rule_text[:5000]})
         final_report = json.loads(raw_result)
         
         ai_detected_act = final_report.get("detected_parent_act", "")
@@ -267,7 +281,7 @@ async def ingest_act(act_name: str = Form(...), file: UploadFile = File(...), us
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
         chunks = splitter.split_text(text)
         
-        docs = [Document(page_content=c, metadata={"act_name": act_name}) for c in chunks] 
+        docs = [Document(page_content=c, metadata={"act_name": act_name, "jurisdiction": "Manual Upload", "state_name": "N/A"}) for c in chunks] 
         vectorstore.add_documents(docs)
         return {"status": "success", "message": f"Successfully ingested {len(docs)} segments."}
     except Exception as e:

@@ -11,3 +11,5 @@ langchain-groq
 langchain-qdrant
 langchain-huggingface
 langchain-text-splitters
+sentence-transformers
+groq
