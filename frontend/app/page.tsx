@@ -351,6 +351,7 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
+  // ── REFACTORED PDF DOWNLOAD FOR HIGH CONTRAST & DRAFTING NOTES ──
   const triggerPdfDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
@@ -368,6 +369,7 @@ export default function Home() {
       };
 
       const addHeader = (text: string, y: number) => {
+        if (y > pageHeight - 30) { doc.addPage(); drawBorder(); y = margin + 10; }
         doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(100, 100, 100); doc.text(text, margin, y);
         doc.setDrawColor(200, 200, 200); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 12; 
       };
@@ -416,7 +418,7 @@ export default function Home() {
 
       yPos += 46;
 
-      yPos = addHeader("SECTION 3 · AUDIT & REMEDIATION MATRIX", yPos);
+      yPos = addHeader("SECTION 3 · AUDIT & DEFECT MATRIX", yPos);
       
       if (result.violating_quote && result.violating_quote !== "None") {
         doc.setFillColor(254, 242, 242); doc.setDrawColor(252, 165, 165); doc.setLineWidth(0.5);
@@ -426,7 +428,8 @@ export default function Home() {
         
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
-        doc.setTextColor(153, 27, 27); doc.setFontSize(9.5);
+        // FIX: High contrast pure black text, larger font
+        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
         doc.text(issueLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 8;
       }
@@ -439,8 +442,25 @@ export default function Home() {
 
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
         doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
-        doc.setTextColor(22, 101, 52); doc.setFontSize(9.5);
+        // FIX: High contrast pure black text, larger font
+        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
         doc.text(fixLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
+        yPos += boxHeight + 16;
+      }
+
+      // NEW FIX: Inject the Deep Draftsman AI output if it was generated
+      if (draftResult) {
+        yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
+        
+        doc.setFillColor(248, 250, 252); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.5);
+        const draftText = `COMPLIANT DRAFT REWRITE:\n${draftResult.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${draftResult.drafting_notes}`;
+        const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
+        const boxHeight = (draftLines.length * 5) + 12;
+
+        if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD");
+        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
+        doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 16;
       }
 
