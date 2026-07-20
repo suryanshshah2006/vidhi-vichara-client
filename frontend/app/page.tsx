@@ -356,13 +356,12 @@ export default function Home() {
     try {
       setLoading(true);
 
-      // --- CRITICAL FIX: FORCED AWAIT FOR DRAFTSMAN API ---
+      // --- 1. FORCE THE DRAFTSMAN FETCH BEFORE GENERATING PDF ---
       let finalDraft = draftResult;
       if (!finalDraft && result?.violating_quote && result.violating_quote !== "None") {
         try {
           const fd = new FormData();
           fd.append("flagged_clause", result.violating_quote);
-          // This will explicitly pause the PDF generation until the AI returns
           const res = await fetch(`${API_BASE_URL}/api/remediate`, { 
             method: "POST", 
             headers: { "Authorization": `Bearer ${activeUser.token}` }, 
@@ -370,10 +369,10 @@ export default function Home() {
           });
           if (res.ok) {
             finalDraft = await res.json();
-            setDraftResult(finalDraft); // Save to state so it shows in UI later
+            setDraftResult(finalDraft); // Save to UI state
           }
         } catch (e) {
-          console.error("Auto-fetch for Draftsman failed:", e);
+          console.error("Draftsman fetch failed:", e);
         }
       }
 
@@ -423,10 +422,8 @@ export default function Home() {
 
       yPos += 8; 
       yPos = addHeader("SECTION 2 · EXECUTIVE SCORING", yPos);
-      
-      // Removed FD fill, using S (Stroke) for borders to prevent black boxes
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(margin, yPos, pageWidth - (margin * 2), 32, "S");
+      doc.setFillColor(248, 250, 252); doc.setDrawColor(226, 232, 240);
+      doc.rect(margin, yPos, pageWidth - (margin * 2), 32, "FD");
       
       doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text("COMPOSITE VVAI SCORE:", margin + 5, yPos + 10);
       doc.setFontSize(14); doc.setTextColor(217, 119, 6); doc.text(`${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00`, margin + 60, yPos + 10);
@@ -443,65 +440,66 @@ export default function Home() {
 
       yPos = addHeader("SECTION 3 · AUDIT & DEFECT MATRIX", yPos);
       
-      // FLAGGED PASSAGE (Red Outline, White BG, Black Text)
+      // FLAGGED PASSAGE (Light Red Fill, Dark Red Text)
       if (result.violating_quote && result.violating_quote !== "None") {
-        doc.setDrawColor(220, 38, 38); // Red border
+        doc.setFillColor(254, 242, 242); // Safe RGB for Light Red
+        doc.setDrawColor(252, 165, 165); 
         doc.setLineWidth(0.5);
         const issueText = `FLAGGED PASSAGE:\n"${result.violating_quote}"\n\nDEFECT ANALYSIS:\n${result.explanation || "No explanation provided."}`;
         const issueLines = doc.splitTextToSize(issueText, pageWidth - (margin * 2) - 10);
         const boxHeight = (issueLines.length * 5) + 12;
         
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "S"); // S = Stroke only
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD"); 
         
-        doc.setTextColor(0, 0, 0); // Pure Black
+        doc.setTextColor(153, 27, 27); // Dark Red Text
         doc.setFontSize(10);
         doc.text(issueLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 8;
       }
 
-      // RECOMMENDED CORRECTION (Green Outline, White BG, Black Text)
+      // RECOMMENDED CORRECTION (Light Green Fill, Dark Green Text)
       if (result.suggested_fix && result.suggested_fix !== "None") {
-        doc.setDrawColor(22, 163, 74); // Green border
+        doc.setFillColor(240, 253, 244); // Safe RGB for Light Green
+        doc.setDrawColor(134, 239, 172); 
         doc.setLineWidth(0.5);
         const fixText = `CONSULTANT RECOMMENDED CORRECTION:\n${result.suggested_fix}`;
         const fixLines = doc.splitTextToSize(fixText, pageWidth - (margin * 2) - 10);
         const boxHeight = (fixLines.length * 5) + 12;
 
         if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "S"); // S = Stroke only
+        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD"); 
         
-        doc.setTextColor(0, 0, 0); // Pure Black
+        doc.setTextColor(22, 101, 52); // Dark Green Text
         doc.setFontSize(10);
         doc.text(fixLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
         yPos += boxHeight + 16;
       }
 
-      // SECTION 4 - AUTONOMOUS REMEDIATION (Blue Outline, White BG, Black Text)
-      if (result.violating_quote && result.violating_quote !== "None") {
-        yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
-        
-        doc.setDrawColor(37, 99, 235); // Blue Border
-        doc.setLineWidth(0.5);
-        
-        let draftText = "";
-        if (finalDraft) {
-          draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraft.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraft.drafting_notes}`;
-        } else {
-          draftText = `COMPLIANT DRAFT REWRITE:\n[Error: The drafting engine could not automatically generate a rewrite during PDF export. Please verify backend connection.]`;
-        }
-        
-        const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
-        const boxHeight4 = (draftLines.length * 5) + 12;
-
-        if (yPos + boxHeight4 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "S"); // S = Stroke only
-        
-        doc.setTextColor(0, 0, 0); // Pure Black
-        doc.setFontSize(10);
-        doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
-        yPos += boxHeight4 + 16;
+      // SECTION 4 - AUTONOMOUS REMEDIATION (Light Slate Fill, Dark Slate Text)
+      yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
+      
+      doc.setFillColor(248, 250, 252); // Safe RGB for Light Slate
+      doc.setDrawColor(203, 213, 225); 
+      doc.setLineWidth(0.5);
+      
+      let draftText = "";
+      if (finalDraft) {
+        draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraft.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraft.drafting_notes}`;
+      } else {
+        draftText = `COMPLIANT DRAFT REWRITE:\n[Error: The drafting engine could not automatically generate a rewrite during PDF export. Please verify the backend connection and try again.]`;
       }
+      
+      const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
+      const boxHeight4 = (draftLines.length * 5) + 12;
+
+      if (yPos + boxHeight4 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
+      doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "FD");
+      
+      doc.setTextColor(15, 23, 42); // Dark Slate Text
+      doc.setFontSize(10);
+      doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
+      yPos += boxHeight4 + 16;
 
       if (yPos + 60 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
       
@@ -534,7 +532,7 @@ export default function Home() {
       doc.save(`VVAR_${result.detected_act?.substring(0, 15).replace(/[^a-zA-Z0-9]/g, "_") || "Report"}_${Date.now()}.pdf`);
     } catch (err) { alert("Failed to generate PDF."); console.error(err); } finally { setLoading(false); }
   };
-
+  
   if (!isMounted) return null;
 
   return (
