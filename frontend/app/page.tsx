@@ -369,7 +369,7 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
-  // ── MICROSOFT WORD (.doc) EXPORT WITH PARAGRAPH JUSTIFICATION ──
+  // ── MICROSOFT WORD (.doc) EXPORT WITH SELECTIVE JUSTIFICATION ──
   const triggerWordDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
@@ -392,8 +392,8 @@ export default function Home() {
             .red-text { color: #b91c1c; font-weight: bold; }
             .green-text { color: #15803d; font-weight: bold; }
             .blue-text { color: #1d4ed8; font-weight: bold; }
-            /* Added text-align: justify to force proper document block alignment */
-            .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background-color: #fdfdfd; text-align: justify; }
+            /* Removed justify from the box so subheadings stay left-aligned */
+            .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background-color: #fdfdfd; }
           </style>
         </head>
         <body>
@@ -420,27 +420,27 @@ export default function Home() {
           <div class="section-title">SECTION 3: AUDIT & DEFECT MATRIX</div>
           ${result.violating_quote && result.violating_quote !== "None" ? `
             <div class="box">
-              <span class="red-text">FLAGGED PASSAGE:</span><br/>
-              <i>"${result.violating_quote}"</i><br/><br/>
-              <span class="red-text">DEFECT ANALYSIS:</span><br/>
-              ${result.explanation || "No explanation provided."}
+              <div style="text-align: left; margin-bottom: 4px;"><span class="red-text">FLAGGED PASSAGE:</span></div>
+              <div style="text-align: justify; margin-bottom: 15px;"><i>"${result.violating_quote}"</i></div>
+              <div style="text-align: left; margin-bottom: 4px;"><span class="red-text">DEFECT ANALYSIS:</span></div>
+              <div style="text-align: justify;">${result.explanation || "No explanation provided."}</div>
             </div>
           ` : '<p>No constitutional violations detected.</p>'}
 
           ${result.suggested_fix && result.suggested_fix !== "None" ? `
             <div class="box">
-              <span class="green-text">CONSULTANT RECOMMENDED CORRECTION:</span><br/>
-              ${result.suggested_fix}
+              <div style="text-align: left; margin-bottom: 4px;"><span class="green-text">CONSULTANT RECOMMENDED CORRECTION:</span></div>
+              <div style="text-align: justify;">${result.suggested_fix}</div>
             </div>
           ` : ''}
 
           ${finalDraft ? `
             <div class="section-title">SECTION 4: AUTONOMOUS REMEDIATION DRAFT</div>
             <div class="box">
-              <span class="blue-text">COMPLIANT DRAFT REWRITE:</span><br/>
-              <strong>${finalDraft.compliant_draft}</strong><br/><br/>
-              <span class="blue-text">DRAFTING NOTES & STRATEGY:</span><br/>
-              ${finalDraft.drafting_notes}
+              <div style="text-align: left; margin-bottom: 4px;"><span class="blue-text">COMPLIANT DRAFT REWRITE:</span></div>
+              <div style="text-align: justify; margin-bottom: 15px;"><strong>${finalDraft.compliant_draft}</strong></div>
+              <div style="text-align: left; margin-bottom: 4px;"><span class="blue-text">DRAFTING NOTES & STRATEGY:</span></div>
+              <div style="text-align: justify;">${finalDraft.drafting_notes}</div>
             </div>
           ` : ''}
 
