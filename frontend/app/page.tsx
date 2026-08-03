@@ -369,7 +369,7 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
-  // ── NEW FEATURE: FLAWLESS MICROSOFT WORD (.doc) EXPORT ──
+  // ── MICROSOFT WORD (.doc) EXPORT WITH PARAGRAPH JUSTIFICATION ──
   const triggerWordDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
@@ -392,7 +392,8 @@ export default function Home() {
             .red-text { color: #b91c1c; font-weight: bold; }
             .green-text { color: #15803d; font-weight: bold; }
             .blue-text { color: #1d4ed8; font-weight: bold; }
-            .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background-color: #fdfdfd; }
+            /* Added text-align: justify to force proper document block alignment */
+            .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background-color: #fdfdfd; text-align: justify; }
           </style>
         </head>
         <body>
@@ -475,7 +476,7 @@ export default function Home() {
     finally { setExportLoading(false); }
   };
 
-  // ── REWRITTEN CLEAN PDF LOGIC (NO BACKGROUND BOXES, GUARANTEED API FETCH) ──
+  // ── CLEAN PDF LOGIC (WITH EXPLICIT TEXT JUSTIFICATION) ──
   const triggerPdfDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
@@ -487,6 +488,7 @@ export default function Home() {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
 
       const addHeader = (text: string, y: number) => {
         if (y > pageHeight - 30) { doc.addPage(); y = margin + 10; }
@@ -540,17 +542,17 @@ export default function Home() {
 
       yPos = addHeader("SECTION 3: AUDIT & DEFECT MATRIX", yPos);
       
-      // Clean Text Formatting - No background boxes
       if (result.violating_quote && result.violating_quote !== "None") {
         if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
-        doc.setFont("helvetica", "bold"); doc.setTextColor(185, 28, 28); // Clean Red
+        doc.setFont("helvetica", "bold"); doc.setTextColor(185, 28, 28); 
         doc.text("FLAGGED PASSAGE:", margin, yPos);
         yPos += 6;
         
-        doc.setFont("helvetica", "italic"); doc.setTextColor(0, 0, 0); // Black Text
-        const issueLines = doc.splitTextToSize(`"${result.violating_quote}"`, pageWidth - (margin * 2));
-        doc.text(issueLines, margin, yPos);
-        yPos += (issueLines.length * 5) + 6;
+        // Explicitly using align: "justify" with maxWidth
+        doc.setFont("helvetica", "italic"); doc.setTextColor(0, 0, 0); 
+        const quoteText = `"${result.violating_quote}"`;
+        doc.text(quoteText, margin, yPos, { maxWidth: contentWidth, align: "justify" });
+        yPos += (doc.splitTextToSize(quoteText, contentWidth).length * 5) + 6;
 
         if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
         doc.setFont("helvetica", "bold"); doc.setTextColor(185, 28, 28); 
@@ -558,21 +560,21 @@ export default function Home() {
         yPos += 6;
 
         doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0); 
-        const analysisLines = doc.splitTextToSize(result.explanation || "No explanation provided.", pageWidth - (margin * 2));
-        doc.text(analysisLines, margin, yPos);
-        yPos += (analysisLines.length * 5) + 10;
+        const analysisText = result.explanation || "No explanation provided.";
+        doc.text(analysisText, margin, yPos, { maxWidth: contentWidth, align: "justify" });
+        yPos += (doc.splitTextToSize(analysisText, contentWidth).length * 5) + 10;
       }
 
       if (result.suggested_fix && result.suggested_fix !== "None") {
         if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
-        doc.setFont("helvetica", "bold"); doc.setTextColor(21, 128, 61); // Clean Green
+        doc.setFont("helvetica", "bold"); doc.setTextColor(21, 128, 61); 
         doc.text("CONSULTANT RECOMMENDED CORRECTION:", margin, yPos);
         yPos += 6;
 
         doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0); 
-        const fixLines = doc.splitTextToSize(result.suggested_fix, pageWidth - (margin * 2));
-        doc.text(fixLines, margin, yPos);
-        yPos += (fixLines.length * 5) + 10;
+        const fixText = result.suggested_fix;
+        doc.text(fixText, margin, yPos, { maxWidth: contentWidth, align: "justify" });
+        yPos += (doc.splitTextToSize(fixText, contentWidth).length * 5) + 10;
       }
 
       // SECTION 4 - AUTONOMOUS REMEDIATION
@@ -581,14 +583,14 @@ export default function Home() {
         
         if (finalDraft) {
           if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
-          doc.setFont("helvetica", "bold"); doc.setTextColor(29, 78, 216); // Clean Blue
+          doc.setFont("helvetica", "bold"); doc.setTextColor(29, 78, 216); 
           doc.text("COMPLIANT DRAFT REWRITE:", margin, yPos);
           yPos += 6;
           
           doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); 
-          const rewriteLines = doc.splitTextToSize(finalDraft.compliant_draft, pageWidth - (margin * 2));
-          doc.text(rewriteLines, margin, yPos);
-          yPos += (rewriteLines.length * 5) + 6;
+          const rewriteText = finalDraft.compliant_draft;
+          doc.text(rewriteText, margin, yPos, { maxWidth: contentWidth, align: "justify" });
+          yPos += (doc.splitTextToSize(rewriteText, contentWidth).length * 5) + 6;
 
           if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
           doc.setFont("helvetica", "bold"); doc.setTextColor(29, 78, 216);
@@ -596,15 +598,15 @@ export default function Home() {
           yPos += 6;
 
           doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0); 
-          const notesLines = doc.splitTextToSize(finalDraft.drafting_notes, pageWidth - (margin * 2));
-          doc.text(notesLines, margin, yPos);
-          yPos += (notesLines.length * 5) + 10;
+          const notesText = finalDraft.drafting_notes;
+          doc.text(notesText, margin, yPos, { maxWidth: contentWidth, align: "justify" });
+          yPos += (doc.splitTextToSize(notesText, contentWidth).length * 5) + 10;
 
         } else {
           doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100); 
-          const errLines = doc.splitTextToSize("[Error: The drafting engine could not automatically generate a rewrite during export. Please verify the backend connection.]", pageWidth - (margin * 2));
-          doc.text(errLines, margin, yPos);
-          yPos += (errLines.length * 5) + 10;
+          const errText = "[Error: The drafting engine could not automatically generate a rewrite during export. Please verify the backend connection.]";
+          doc.text(errText, margin, yPos, { maxWidth: contentWidth, align: "justify" });
+          yPos += (doc.splitTextToSize(errText, contentWidth).length * 5) + 10;
         }
       }
 
