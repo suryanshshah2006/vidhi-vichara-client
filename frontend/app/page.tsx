@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Menu, FileText, CheckCircle, AlertTriangle, Download, UploadCloud, User, Database, ChevronRight, Activity, Scale, MessageSquare, LogOut, ShieldAlert, BarChart3, HardDrive, Clock, Wand2, RefreshCw, Check, ArrowLeft, BookOpen, ExternalLink, Lightbulb, ShieldCheck, Eye, EyeOff, ArrowRight, Cpu, Home as HomeIcon } from "lucide-react";
+import { Plus, Menu, FileText, CheckCircle, AlertTriangle, Download, UploadCloud, User, Database, ChevronRight, Activity, Scale, MessageSquare, LogOut, ShieldAlert, BarChart3, HardDrive, Clock, Wand2, RefreshCw, Check, ArrowLeft, BookOpen, ExternalLink, Lightbulb, ShieldCheck, Eye, EyeOff, ArrowRight, Cpu, Home as HomeIcon, FileCode2 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── SECURE CLOUD INITIALIZATION ──
@@ -56,6 +56,7 @@ export default function Home() {
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftResult, setDraftResult] = useState<any>(null);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const [ingestActName, setIngestActName] = useState("");
   const [ingestFile, setIngestFile] = useState<File | null>(null);
@@ -266,17 +267,35 @@ export default function Home() {
     if (window.innerWidth < 768) setSidebarOpen(false); 
   };
 
+  // HELPER TO GUARANTEE DRAFTSMAN FETCH
+  const ensureDraftsmanData = async () => {
+    if (draftResult) return draftResult;
+    if (!result?.violating_quote || result.violating_quote === "None" || result.band === 'Green') return null;
+
+    try {
+      const fd = new FormData();
+      fd.append("flagged_clause", result.violating_quote);
+      const res = await fetch(`${API_BASE_URL}/api/remediate`, { 
+        method: "POST", 
+        headers: { "Authorization": `Bearer ${activeUser?.token}` }, 
+        body: fd 
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDraftResult(data);
+        return data;
+      }
+    } catch (e) {
+      console.error("Draftsman auto-fetch failed:", e);
+    }
+    return null;
+  };
+
   const launchDraftingEngine = async () => {
     if (!result?.violating_quote) return;
     setShowDraftModal(true); setDraftLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("flagged_clause", result.violating_quote);
-      const response = await fetch(`${API_BASE_URL}/api/remediate`, { method: "POST", headers: { "Authorization": `Bearer ${activeUser?.token}` }, body: formData });
-      if (!response.ok) throw new Error("Drafting engine failed.");
-      setDraftResult(await response.json());
-    } catch (e) { console.error(e); } 
-    finally { setDraftLoading(false); }
+    await ensureDraftsmanData();
+    setDraftLoading(false);
   };
 
   const handleIngestAct = async (e: React.FormEvent) => {
@@ -350,31 +369,118 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
 
-  // ── COMPLETELY REWRITTEN PDF LOGIC (NO BACKGROUND FILLS, GUARANTEED API FETCH) ──
+  // ── NEW FEATURE: FLAWLESS MICROSOFT WORD (.doc) EXPORT ──
+  const triggerWordDownload = async () => {
+    if (!activeUser) { setShowAuthModal(true); return; }
+    try {
+      setExportLoading(true);
+      const finalDraft = await ensureDraftsmanData();
+
+      const htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset='utf-8'>
+          <title>Alignment Report</title>
+          <style>
+            body { font-family: 'Calibri', 'Arial', sans-serif; color: #000; line-height: 1.6; }
+            h1 { text-align: center; color: #1e293b; font-size: 24px; text-transform: uppercase; margin-bottom: 5px; }
+            h2 { color: #475569; font-size: 14px; text-align: center; margin-top: 0; margin-bottom: 30px; font-weight: normal; }
+            .section-title { font-size: 16px; color: #333; border-bottom: 2px solid #ccc; padding-bottom: 4px; margin-top: 30px; margin-bottom: 15px; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+            th { background-color: #f8fafc; font-weight: bold; width: 30%; color: #333; }
+            .red-text { color: #b91c1c; font-weight: bold; }
+            .green-text { color: #15803d; font-weight: bold; }
+            .blue-text { color: #1d4ed8; font-weight: bold; }
+            .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background-color: #fdfdfd; }
+          </style>
+        </head>
+        <body>
+          <h1>Vidhi-Vichara Alignment Report</h1>
+          <h2>Professional Vires & Statutory Compliance Audit</h2>
+          
+          <div class="section-title">SECTION 1: METADATA & IDENTIFICATION</div>
+          <table>
+            <tr><th>Audit Reference ID:</th><td>VVAR-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}</td></tr>
+            <tr><th>Timestamp of Review:</th><td>${new Date().toLocaleDateString('en-GB')}</td></tr>
+            <tr><th>Governing Statute:</th><td>${result.detected_act || "Pending Verification"}</td></tr>
+            <tr><th>Target Jurisdiction:</th><td>${result.detected_jurisdiction || "Auto-Detected"}</td></tr>
+            <tr><th>Inference Pipeline:</th><td>VVAI Constitutional LPU v1.0</td></tr>
+          </table>
+
+          <div class="section-title">SECTION 2: EXECUTIVE SCORING</div>
+          <table>
+            <tr><th>COMPOSITE VVAI SCORE:</th><td><strong>${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00</strong></td></tr>
+            <tr><th>DEVIATION BAND:</th><td class="${result.band === 'Green' ? 'green-text' : 'red-text'}">${(result.band || "UNKNOWN").toUpperCase()}</td></tr>
+            <tr><th>Taxonomy Code:</th><td>${result.deviation_type || "None"}</td></tr>
+            <tr><th>Severity Level:</th><td>${result.severity || "None"}</td></tr>
+          </table>
+
+          <div class="section-title">SECTION 3: AUDIT & DEFECT MATRIX</div>
+          ${result.violating_quote && result.violating_quote !== "None" ? `
+            <div class="box">
+              <span class="red-text">FLAGGED PASSAGE:</span><br/>
+              <i>"${result.violating_quote}"</i><br/><br/>
+              <span class="red-text">DEFECT ANALYSIS:</span><br/>
+              ${result.explanation || "No explanation provided."}
+            </div>
+          ` : '<p>No constitutional violations detected.</p>'}
+
+          ${result.suggested_fix && result.suggested_fix !== "None" ? `
+            <div class="box">
+              <span class="green-text">CONSULTANT RECOMMENDED CORRECTION:</span><br/>
+              ${result.suggested_fix}
+            </div>
+          ` : ''}
+
+          ${finalDraft ? `
+            <div class="section-title">SECTION 4: AUTONOMOUS REMEDIATION DRAFT</div>
+            <div class="box">
+              <span class="blue-text">COMPLIANT DRAFT REWRITE:</span><br/>
+              <strong>${finalDraft.compliant_draft}</strong><br/><br/>
+              <span class="blue-text">DRAFTING NOTES & STRATEGY:</span><br/>
+              ${finalDraft.drafting_notes}
+            </div>
+          ` : ''}
+
+          <div class="section-title">APPENDIX A: STATUTORY TAXONOMY & SEVERITY LEGEND</div>
+          <p>
+            <strong>Deviation Codes (T):</strong><br/>
+            T1: Ultra Vires (Schedule VII List Overreach)<br/>
+            T2: Procedural Gateway Non-Compliance<br/>
+            T3: Definitional Vagueness (Art. 14 Breach)<br/>
+            T4: Purposive Incompatibility w/ Parent Act<br/>
+            T5: Delegated Sanction Disproportionality
+          </p>
+          <p>
+            <strong>Severity Scale (S):</strong><br/>
+            S1: Minor drafting friction (Easily curable)<br/>
+            S2: Moderate procedural mismatch<br/>
+            S3: High Substantive Risk (Major redraft)<br/>
+            S4 / Critical: Incurable Constitutional Defect
+          </p>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `VVAR_${result.detected_act?.substring(0, 15).replace(/[^a-zA-Z0-9]/g, "_") || "Report"}.doc`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) { alert("Failed to generate Word document."); console.error(err); } 
+    finally { setExportLoading(false); }
+  };
+
+  // ── REWRITTEN CLEAN PDF LOGIC (NO BACKGROUND BOXES, GUARANTEED API FETCH) ──
   const triggerPdfDownload = async () => {
     if (!activeUser) { setShowAuthModal(true); return; }
     try {
-      setLoading(true);
-
-      // --- 1. FORCE THE DRAFTSMAN FETCH BEFORE GENERATING PDF ---
-      let finalDraft = draftResult;
-      if (!finalDraft && result?.violating_quote && result.violating_quote !== "None") {
-        try {
-          const fd = new FormData();
-          fd.append("flagged_clause", result.violating_quote);
-          const res = await fetch(`${API_BASE_URL}/api/remediate`, { 
-            method: "POST", 
-            headers: { "Authorization": `Bearer ${activeUser.token}` }, 
-            body: fd 
-          });
-          if (res.ok) {
-            finalDraft = await res.json();
-            setDraftResult(finalDraft); // Save to UI state
-          }
-        } catch (e) {
-          console.error("Draftsman fetch failed:", e);
-        }
-      }
+      setExportLoading(true);
+      const finalDraft = await ensureDraftsmanData();
 
       const { jsPDF } = await import("jspdf");
       const doc = new jsPDF();
@@ -382,26 +488,20 @@ export default function Home() {
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
 
-      const drawBorder = () => {
-        doc.setDrawColor(50, 50, 50); doc.setLineWidth(0.5);
-        doc.rect(margin - 5, margin - 5, pageWidth - (margin * 2) + 10, pageHeight - (margin * 2) + 10);
-        doc.setLineWidth(0.1); doc.rect(margin - 3, margin - 3, pageWidth - (margin * 2) + 6, pageHeight - (margin * 2) + 6);
-      };
-
       const addHeader = (text: string, y: number) => {
-        if (y > pageHeight - 30) { doc.addPage(); drawBorder(); y = margin + 10; }
-        doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(100, 100, 100); doc.text(text, margin, y);
-        doc.setDrawColor(200, 200, 200); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 12; 
+        if (y > pageHeight - 30) { doc.addPage(); y = margin + 10; }
+        doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(50, 50, 50); doc.text(text, margin, y);
+        doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.5); doc.line(margin, y + 3, pageWidth - margin, y + 3); return y + 15; 
       };
 
-      drawBorder();
-      doc.setFont("times", "bold"); doc.setFontSize(22); doc.setTextColor(30, 41, 59);
-      doc.text("VIDHI-VICHARA ALIGNMENT REPORT", pageWidth / 2, 35, { align: "center" });
+      // Title
+      doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(0, 0, 0);
+      doc.text("VIDHI-VICHARA ALIGNMENT REPORT", pageWidth / 2, margin, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(100, 100, 100);
-      doc.text("Professional Vires & Statutory Compliance Audit", pageWidth / 2, 43, { align: "center" });
+      doc.text("Professional Vires & Statutory Compliance Audit", pageWidth / 2, margin + 6, { align: "center" });
 
-      let yPos = 65; 
-      yPos = addHeader("SECTION 1 · METADATA & IDENTIFICATION", yPos);
+      let yPos = 45; 
+      yPos = addHeader("SECTION 1: METADATA & IDENTIFICATION", yPos);
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
       
       const idData = [
@@ -413,102 +513,109 @@ export default function Home() {
       ];
 
       idData.forEach(row => {
-        doc.setFont("helvetica", "bold"); doc.text(row[0], margin + 5, yPos);
+        if (yPos > pageHeight - 20) { doc.addPage(); yPos = margin + 10; }
+        doc.setFont("helvetica", "bold"); doc.text(row[0], margin, yPos);
         doc.setFont("helvetica", "normal");
-        const wrappedValue = doc.splitTextToSize(row[1], 100);
+        const wrappedValue = doc.splitTextToSize(row[1], 110);
         doc.text(wrappedValue, margin + 45, yPos);
-        yPos += (wrappedValue.length * 5) + 4; 
+        yPos += (wrappedValue.length * 6) + 2; 
       });
 
-      yPos += 8; 
-      yPos = addHeader("SECTION 2 · EXECUTIVE SCORING", yPos);
-      doc.setFillColor(248, 250, 252); doc.setDrawColor(226, 232, 240);
-      doc.rect(margin, yPos, pageWidth - (margin * 2), 32, "FD");
+      yPos += 5; 
+      yPos = addHeader("SECTION 2: EXECUTIVE SCORING", yPos);
       
-      doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text("COMPOSITE VVAI SCORE:", margin + 5, yPos + 10);
-      doc.setFontSize(14); doc.setTextColor(217, 119, 6); doc.text(`${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00`, margin + 60, yPos + 10);
+      doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text("COMPOSITE VVAI SCORE:", margin, yPos);
+      doc.setFontSize(11); doc.setTextColor(217, 119, 6); doc.text(`${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00`, margin + 55, yPos);
       
-      doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.text("DEVIATION BAND:", margin + 105, yPos + 10);
+      doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.text("DEVIATION BAND:", margin, yPos + 8);
       const isGreen = result.band === 'Green';
       doc.setTextColor(isGreen ? 22 : 220, isGreen ? 163 : 38, isGreen ? 74 : 38);
-      doc.text((result.band || "UNKNOWN").toUpperCase(), margin + 140, yPos + 10);
+      doc.text((result.band || "UNKNOWN").toUpperCase(), margin + 35, yPos + 8);
 
-      doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
-      doc.text(`Taxonomy Code: [ ${result.deviation_type || "None"} ]   |   Severity Level: [ ${result.severity || "None"} ]`, margin + 5, yPos + 23);
+      doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      doc.text(`Taxonomy Code: ${result.deviation_type || "None"}`, margin, yPos + 16);
+      doc.text(`Severity Level: ${result.severity || "None"}`, margin, yPos + 24);
 
-      yPos += 46;
+      yPos += 35;
 
-      yPos = addHeader("SECTION 3 · AUDIT & DEFECT MATRIX", yPos);
+      yPos = addHeader("SECTION 3: AUDIT & DEFECT MATRIX", yPos);
       
-      // FLAGGED PASSAGE (Light Red Fill, Dark Red Text)
+      // Clean Text Formatting - No background boxes
       if (result.violating_quote && result.violating_quote !== "None") {
-        doc.setFillColor(254, 242, 242); // Safe RGB for Light Red
-        doc.setDrawColor(252, 165, 165); 
-        doc.setLineWidth(0.5);
-        const issueText = `FLAGGED PASSAGE:\n"${result.violating_quote}"\n\nDEFECT ANALYSIS:\n${result.explanation || "No explanation provided."}`;
-        const issueLines = doc.splitTextToSize(issueText, pageWidth - (margin * 2) - 10);
-        const boxHeight = (issueLines.length * 5) + 12;
+        if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
+        doc.setFont("helvetica", "bold"); doc.setTextColor(185, 28, 28); // Clean Red
+        doc.text("FLAGGED PASSAGE:", margin, yPos);
+        yPos += 6;
         
-        if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD"); 
-        
-        doc.setTextColor(153, 27, 27); // Dark Red Text
-        doc.setFontSize(10);
-        doc.text(issueLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
-        yPos += boxHeight + 8;
+        doc.setFont("helvetica", "italic"); doc.setTextColor(0, 0, 0); // Black Text
+        const issueLines = doc.splitTextToSize(`"${result.violating_quote}"`, pageWidth - (margin * 2));
+        doc.text(issueLines, margin, yPos);
+        yPos += (issueLines.length * 5) + 6;
+
+        if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
+        doc.setFont("helvetica", "bold"); doc.setTextColor(185, 28, 28); 
+        doc.text("DEFECT ANALYSIS:", margin, yPos);
+        yPos += 6;
+
+        doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0); 
+        const analysisLines = doc.splitTextToSize(result.explanation || "No explanation provided.", pageWidth - (margin * 2));
+        doc.text(analysisLines, margin, yPos);
+        yPos += (analysisLines.length * 5) + 10;
       }
 
-      // RECOMMENDED CORRECTION (Light Green Fill, Dark Green Text)
       if (result.suggested_fix && result.suggested_fix !== "None") {
-        doc.setFillColor(240, 253, 244); // Safe RGB for Light Green
-        doc.setDrawColor(134, 239, 172); 
-        doc.setLineWidth(0.5);
-        const fixText = `CONSULTANT RECOMMENDED CORRECTION:\n${result.suggested_fix}`;
-        const fixLines = doc.splitTextToSize(fixText, pageWidth - (margin * 2) - 10);
-        const boxHeight = (fixLines.length * 5) + 12;
+        if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
+        doc.setFont("helvetica", "bold"); doc.setTextColor(21, 128, 61); // Clean Green
+        doc.text("CONSULTANT RECOMMENDED CORRECTION:", margin, yPos);
+        yPos += 6;
 
-        if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-        doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, "FD"); 
+        doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0); 
+        const fixLines = doc.splitTextToSize(result.suggested_fix, pageWidth - (margin * 2));
+        doc.text(fixLines, margin, yPos);
+        yPos += (fixLines.length * 5) + 10;
+      }
+
+      // SECTION 4 - AUTONOMOUS REMEDIATION
+      if (result.violating_quote && result.violating_quote !== "None") {
+        yPos = addHeader("SECTION 4: AUTONOMOUS REMEDIATION DRAFT", yPos);
         
-        doc.setTextColor(22, 101, 52); // Dark Green Text
-        doc.setFontSize(10);
-        doc.text(fixLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
-        yPos += boxHeight + 16;
+        if (finalDraft) {
+          if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
+          doc.setFont("helvetica", "bold"); doc.setTextColor(29, 78, 216); // Clean Blue
+          doc.text("COMPLIANT DRAFT REWRITE:", margin, yPos);
+          yPos += 6;
+          
+          doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); 
+          const rewriteLines = doc.splitTextToSize(finalDraft.compliant_draft, pageWidth - (margin * 2));
+          doc.text(rewriteLines, margin, yPos);
+          yPos += (rewriteLines.length * 5) + 6;
+
+          if (yPos > pageHeight - 30) { doc.addPage(); yPos = margin + 10; }
+          doc.setFont("helvetica", "bold"); doc.setTextColor(29, 78, 216);
+          doc.text("DRAFTING NOTES & STRATEGY:", margin, yPos);
+          yPos += 6;
+
+          doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0); 
+          const notesLines = doc.splitTextToSize(finalDraft.drafting_notes, pageWidth - (margin * 2));
+          doc.text(notesLines, margin, yPos);
+          yPos += (notesLines.length * 5) + 10;
+
+        } else {
+          doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100); 
+          const errLines = doc.splitTextToSize("[Error: The drafting engine could not automatically generate a rewrite during export. Please verify the backend connection.]", pageWidth - (margin * 2));
+          doc.text(errLines, margin, yPos);
+          yPos += (errLines.length * 5) + 10;
+        }
       }
 
-      // SECTION 4 - AUTONOMOUS REMEDIATION (Light Slate Fill, Dark Slate Text)
-      yPos = addHeader("SECTION 4 · AUTONOMOUS REMEDIATION DRAFT", yPos);
+      if (yPos > pageHeight - 60) { doc.addPage(); yPos = margin + 10; }
       
-      doc.setFillColor(248, 250, 252); // Safe RGB for Light Slate
-      doc.setDrawColor(203, 213, 225); 
-      doc.setLineWidth(0.5);
-      
-      let draftText = "";
-      if (finalDraft) {
-        draftText = `COMPLIANT DRAFT REWRITE:\n${finalDraft.compliant_draft}\n\nDRAFTING NOTES & STRATEGY:\n${finalDraft.drafting_notes}`;
-      } else {
-        draftText = `COMPLIANT DRAFT REWRITE:\n[Error: The drafting engine could not automatically generate a rewrite during PDF export. Please verify the backend connection and try again.]`;
-      }
-      
-      const draftLines = doc.splitTextToSize(draftText, pageWidth - (margin * 2) - 10);
-      const boxHeight4 = (draftLines.length * 5) + 12;
-
-      if (yPos + boxHeight4 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-      doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight4, "FD");
-      
-      doc.setTextColor(15, 23, 42); // Dark Slate Text
-      doc.setFontSize(10);
-      doc.text(draftLines, margin + 5, yPos + 8, { lineHeightFactor: 1.4 });
-      yPos += boxHeight4 + 16;
-
-      if (yPos + 60 > pageHeight - margin) { doc.addPage(); drawBorder(); yPos = margin + 15; }
-      
-      yPos = addHeader("APPENDIX A · STATUTORY TAXONOMY & SEVERITY LEGEND", yPos);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
+      yPos = addHeader("APPENDIX A: STATUTORY TAXONOMY & SEVERITY LEGEND", yPos);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(0, 0, 0);
       doc.text("DEVIATION CODES (T):", margin, yPos);
       doc.text("SEVERITY SCALE (S):", margin + 100, yPos);
       
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(80, 80, 80);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
       const tCodes = [
         "T1: Ultra Vires (Schedule VII List Overreach)",
         "T2: Procedural Gateway Non-Compliance",
@@ -527,12 +634,12 @@ export default function Home() {
       sCodes.forEach((sc, i) => doc.text(sc, margin + 100, yPos + 6 + (i * 5)));
 
       doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-      doc.text("CONFIDENTIAL - AUTOMATED VIRES ASSESSMENT", pageWidth / 2, pageHeight - 12, { align: "center" });
+      doc.text("CONFIDENTIAL - AUTOMATED VIRES ASSESSMENT", pageWidth / 2, pageHeight - 10, { align: "center" });
 
       doc.save(`VVAR_${result.detected_act?.substring(0, 15).replace(/[^a-zA-Z0-9]/g, "_") || "Report"}_${Date.now()}.pdf`);
-    } catch (err) { alert("Failed to generate PDF."); console.error(err); } finally { setLoading(false); }
+    } catch (err) { alert("Failed to generate PDF."); console.error(err); } finally { setExportLoading(false); }
   };
-  
+
   if (!isMounted) return null;
 
   return (
@@ -1035,9 +1142,16 @@ export default function Home() {
                     </div>
 
                     <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
+                      <button onClick={triggerWordDownload} className="flex items-center gap-2 text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-5 py-2.5 rounded-xl transition border border-indigo-200 shadow-sm active:scale-95">
+                        {exportLoading ? (
+                          <><RefreshCw className="w-4 h-4 animate-spin"/> Preparing...</>
+                        ) : (
+                          <><FileCode2 className="w-4 h-4"/> Export to Word (.doc)</>
+                        )}
+                      </button>
                       <button onClick={triggerPdfDownload} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 px-5 py-2.5 rounded-xl transition border border-slate-200 shadow-sm active:scale-95">
-                        {loading ? (
-                          <><RefreshCw className="w-4 h-4 animate-spin"/> Exporting...</>
+                        {exportLoading ? (
+                          <><RefreshCw className="w-4 h-4 animate-spin"/> Preparing...</>
                         ) : (
                           <><Download className="w-4 h-4"/> Export Executive PDF</>
                         )}
