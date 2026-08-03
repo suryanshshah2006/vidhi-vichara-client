@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Menu, FileText, CheckCircle, AlertTriangle, Download, UploadCloud, User, Database, ChevronRight, Activity, Scale, MessageSquare, LogOut, ShieldAlert, BarChart3, HardDrive, Clock, Wand2, RefreshCw, Check, ArrowLeft, BookOpen, ExternalLink, Lightbulb, ShieldCheck, Eye, EyeOff, ArrowRight, Cpu, Home as HomeIcon, FileCode2 } from "lucide-react";
+import { Plus, Menu, FileText, CheckCircle, AlertTriangle, Download, UploadCloud, User, Database, ChevronRight, Activity, Scale, MessageSquare, LogOut, ShieldAlert, BarChart3, HardDrive, Clock, Wand2, RefreshCw, Check, ArrowLeft, BookOpen, ExternalLink, Lightbulb, ShieldCheck, Eye, EyeOff, ArrowRight, Cpu, Home as HomeIcon } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── SECURE CLOUD INITIALIZATION ──
@@ -22,7 +22,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // ── VIEW CONTROLLER & ROUTING HISTORY ──
-  const [activeTab, useState] = useState<"landing" | "workspace" | "about">("landing");
+  const [activeTab, setActiveTab] = useState<"landing" | "workspace" | "about">("landing");
   const [previousTab, setPreviousTab] = useState<"landing" | "workspace">("landing");
 
   const [activeUser, setActiveUser] = useState<{ name: string, email: string, role: string, token: string } | null>(null);
@@ -368,122 +368,6 @@ export default function Home() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAudit(); } };
-
-  // ── MICROSOFT WORD (.doc) EXPORT (TABLE-BASED BOXES TO PREVENT CLIPPING) ──
-  const triggerWordDownload = async () => {
-    if (!activeUser) { setShowAuthModal(true); return; }
-    try {
-      setExportLoading(true);
-      const finalDraft = await ensureDraftsmanData();
-
-      const htmlContent = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head>
-          <meta charset='utf-8'>
-          <title>Alignment Report</title>
-          <style>
-            body { font-family: 'Calibri', 'Arial', sans-serif; color: #000; }
-            h1 { text-align: center; color: #1e293b; font-size: 24px; text-transform: uppercase; margin-bottom: 5px; }
-            h2 { color: #475569; font-size: 14px; text-align: center; margin-top: 0; margin-bottom: 30px; font-weight: normal; }
-            .section-title { font-size: 16px; color: #333; border-bottom: 2px solid #ccc; padding-bottom: 4px; margin-top: 30px; margin-bottom: 15px; text-transform: uppercase; }
-            .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            .meta-table th, .meta-table td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
-            .meta-table th { background-color: #f8fafc; font-weight: bold; width: 30%; color: #333; }
-            .red-text { color: #b91c1c; font-weight: bold; }
-            .green-text { color: #15803d; font-weight: bold; }
-            .blue-text { color: #1d4ed8; font-weight: bold; }
-            /* Word table-based blocks to completely prevent clipping */
-            .box-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            .box-cell { border: 1px solid #ccc; padding: 15px; background-color: #fdfdfd; }
-            p { margin: 0 0 10px 0; line-height: 1.4; }
-            .justified { text-align: justify; }
-          </style>
-        </head>
-        <body>
-          <h1>Vidhi-Vichara Alignment Report</h1>
-          <h2>Professional Vires & Statutory Compliance Audit</h2>
-          
-          <div class="section-title">SECTION 1: METADATA & IDENTIFICATION</div>
-          <table class="meta-table">
-            <tr><th>Audit Reference ID:</th><td>VVAR-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}</td></tr>
-            <tr><th>Timestamp of Review:</th><td>${new Date().toLocaleDateString('en-GB')}</td></tr>
-            <tr><th>Governing Statute:</th><td>${result.detected_act || "Pending Verification"}</td></tr>
-            <tr><th>Target Jurisdiction:</th><td>${result.detected_jurisdiction || "Auto-Detected"}</td></tr>
-            <tr><th>Inference Pipeline:</th><td>VVAI Constitutional LPU v1.0</td></tr>
-          </table>
-
-          <div class="section-title">SECTION 2: EXECUTIVE SCORING</div>
-          <table class="meta-table">
-            <tr><th>COMPOSITE VVAI SCORE:</th><td><strong>${result.vvai_score !== undefined ? result.vvai_score : "N/A"} / 1.00</strong></td></tr>
-            <tr><th>DEVIATION BAND:</th><td class="${result.band === 'Green' ? 'green-text' : 'red-text'}">${(result.band || "UNKNOWN").toUpperCase()}</td></tr>
-            <tr><th>Taxonomy Code:</th><td>${result.deviation_type || "None"}</td></tr>
-            <tr><th>Severity Level:</th><td>${result.severity || "None"}</td></tr>
-          </table>
-
-          <div class="section-title">SECTION 3: AUDIT & DEFECT MATRIX</div>
-          ${result.violating_quote && result.violating_quote !== "None" ? `
-            <table class="box-table">
-              <tr><td class="box-cell">
-                <p><span class="red-text">FLAGGED PASSAGE:</span></p>
-                <p class="justified"><i>"${result.violating_quote}"</i></p>
-                <p><span class="red-text">DEFECT ANALYSIS:</span></p>
-                <p class="justified" style="margin-bottom: 0;">${result.explanation || "No explanation provided."}</p>
-              </td></tr>
-            </table>
-          ` : '<p>No constitutional violations detected.</p>'}
-
-          ${result.suggested_fix && result.suggested_fix !== "None" ? `
-            <table class="box-table">
-              <tr><td class="box-cell">
-                <p><span class="green-text">CONSULTANT RECOMMENDED CORRECTION:</span></p>
-                <p class="justified" style="margin-bottom: 0;">${result.suggested_fix}</p>
-              </td></tr>
-            </table>
-          ` : ''}
-
-          ${finalDraft ? `
-            <div class="section-title">SECTION 4: AUTONOMOUS REMEDIATION DRAFT</div>
-            <table class="box-table">
-              <tr><td class="box-cell">
-                <p><span class="blue-text">COMPLIANT DRAFT REWRITE:</span></p>
-                <p class="justified"><strong>${finalDraft.compliant_draft}</strong></p>
-                <p><span class="blue-text">DRAFTING NOTES & STRATEGY:</span></p>
-                <p class="justified" style="margin-bottom: 0;">${finalDraft.drafting_notes}</p>
-              </td></tr>
-            </table>
-          ` : ''}
-
-          <div class="section-title">APPENDIX A: STATUTORY TAXONOMY & SEVERITY LEGEND</div>
-          <p>
-            <strong>Deviation Codes (T):</strong><br/>
-            T1: Ultra Vires (Schedule VII List Overreach)<br/>
-            T2: Procedural Gateway Non-Compliance<br/>
-            T3: Definitional Vagueness (Art. 14 Breach)<br/>
-            T4: Purposive Incompatibility w/ Parent Act<br/>
-            T5: Delegated Sanction Disproportionality
-          </p>
-          <p>
-            <strong>Severity Scale (S):</strong><br/>
-            S1: Minor drafting friction (Easily curable)<br/>
-            S2: Moderate procedural mismatch<br/>
-            S3: High Substantive Risk (Major redraft)<br/>
-            S4 / Critical: Incurable Constitutional Defect
-          </p>
-        </body>
-        </html>
-      `;
-
-      const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `VVAR_${result.detected_act?.substring(0, 15).replace(/[^a-zA-Z0-9]/g, "_") || "Report"}.doc`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) { alert("Failed to generate Word document."); console.error(err); } 
-    finally { setExportLoading(false); }
-  };
 
   // ── CLEAN PDF LOGIC (WITH EXPLICIT TEXT JUSTIFICATION) ──
   const triggerPdfDownload = async () => {
@@ -1153,13 +1037,6 @@ export default function Home() {
                     </div>
 
                     <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
-                      <button onClick={triggerWordDownload} className="flex items-center gap-2 text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-5 py-2.5 rounded-xl transition border border-indigo-200 shadow-sm active:scale-95">
-                        {exportLoading ? (
-                          <><RefreshCw className="w-4 h-4 animate-spin"/> Preparing...</>
-                        ) : (
-                          <><FileCode2 className="w-4 h-4"/> Export to Word (.doc)</>
-                        )}
-                      </button>
                       <button onClick={triggerPdfDownload} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 px-5 py-2.5 rounded-xl transition border border-slate-200 shadow-sm active:scale-95">
                         {exportLoading ? (
                           <><RefreshCw className="w-4 h-4 animate-spin"/> Preparing...</>
