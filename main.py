@@ -85,7 +85,7 @@ embeddings = HuggingFaceEndpointEmbeddings(
     huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN
 )
 
-llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama-3.3-70b-versatile", temperature=0.0).bind(response_format={"type": "json_object"})
+llm = ChatGroq(api_key=GROQ_API_KEY, model_name="openai/gpt-oss-20b", temperature=0.0).bind(response_format={"type": "json_object"})
 vectorstore = QdrantVectorStore(client=q_client, collection_name="indian_laws_master", embedding=embeddings)
 
 vvai_prompt = """\

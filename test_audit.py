@@ -1,7 +1,5 @@
-import os
 import json
 import re
-from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
@@ -10,17 +8,20 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# 1. Load API keys from the .env file
-load_dotenv()
+# ── 1. DIRECT KEYS ──
+QDRANT_URL = "https://34c5b349-2de8-4069-8f00-917b1f00557a.sa-east-1-0.aws.cloud.qdrant.io:6333"
+QDRANT_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6OWEzOTc4NDItZjU3My00ZTk0LWI4NjktZGEwMjM0NWFiZjg0In0.NlmNN_vllhTxeRjW_I1MHryHL61h9FAweT5ueL0wOmc"
+GROQ_API_KEY = "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"
 
+# ── 2. INITIALIZE ENGINES ──
 print("1. Connecting to Qdrant Cloud & Loading Multilingual AI...")
-q_client = QdrantClient(url=os.environ.get("QDRANT_URL"), api_key=os.environ.get("QDRANT_API_KEY"))
+q_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
 print("2. Initializing Groq Llama 3.3 Engine...\n")
-llm = ChatGroq(api_key=os.environ.get("GROQ_API_KEY"), model_name="llama-3.3-70b-versatile", temperature=0.0)
+llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama-3.3-70b-versatile", temperature=0.0)
 
-# The Master Prompt
+# ── 3. VVAI MASTER PROMPT ──
 vvai_prompt = """\
 You are an expert Indian Administrative Law Auditor. Calculate the Vidhi-Vichara Alignment Index (VVAI).
 The user has provided a 'Proposed Subordinate Rule' (in English or Hindi).
@@ -56,6 +57,7 @@ prompt = ChatPromptTemplate.from_messages([("system", vvai_prompt), ("human", "P
 def format_docs(docs):
     return "\n\n".join(f"[Act: {d.metadata.get('act_name')} | Lang: {d.metadata.get('language')}]\n{d.page_content}" for d in docs)
 
+# ── 4. EXECUTION PIPELINE ──
 def run_vvai_audit(jurisdiction, state_or_ministry, target_act, proposed_rule):
     print(f"=======================================================")
     print(f"⚖️ AUDITING RULE AGAINST: {target_act}")
@@ -84,10 +86,9 @@ def run_vvai_audit(jurisdiction, state_or_ministry, target_act, proposed_rule):
     except Exception as e:
         print("Raw Output (Failed to parse JSON):", result)
 
-# ── TEST 1: English Central Law ──
+# ── 5. RUN THE TESTS ──
 test_1_rule = "Any social media company operating in India must provide the government with the personal passwords of all users within 1 hour of a verbal request by a police officer, without requiring a court warrant."
 run_vvai_audit("Central", "Central/National", "The Information Technology Act 2000", test_1_rule)
 
-# ── TEST 2: Hindi State Law ──
 test_2_rule = "राज्य में सभी दोपहिया वाहन चालकों के लिए आईएसआई (ISI) मार्क वाला हेलमेट पहनना अनिवार्य है। नियम का उल्लंघन करने पर 50,000 रुपये का जुर्माना और 5 साल की जेल होगी।"
 run_vvai_audit("State", "Maharashtra", "The Motor Vehicles Act 1988", test_2_rule)
